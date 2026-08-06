@@ -69,8 +69,25 @@ The template is set up so agents inherit the conventions instead of needing them
 | `./mvnw spring-boot:run` | Run the app |
 | `bun run dev` | Vite dev server with live reload |
 | `./mvnw test -Dtest=ArchitectureTest` | Architecture rules only |
+| `./mvnw -Pnative native:compile` | GraalVM native image (see below) |
 
 Requires JDK 25. Bun is installed locally by the Maven build; installing [bun](https://bun.sh) globally is only needed for `bun run dev`.
+
+## GraalVM native image
+
+The template compiles to a native binary (verified end to end: pages, all sealed outcomes, WebSocket broadcasts) and starts in ~0.1s:
+
+```bash
+./mvnw -Pnative native:compile
+./target/demo
+```
+
+Requires a GraalVM JDK 25 as `JAVA_HOME` plus `gcc` and `zlib1g-dev` (`sudo apt install build-essential zlib1g-dev` on Debian/Ubuntu).
+
+Two things keep native working here — preserve them as the project grows:
+
+- **No Groovy on the classpath.** This template deliberately uses plain Thymeleaf fragment composition for layouts instead of `thymeleaf-layout-dialect`: the dialect is written in Groovy, and Groovy is broken on current GraalVM (Groovy 5 crashes the build outright — oracle/graal#12986 — and Groovy 4's invokedynamic call sites fail at runtime). Don't add the dialect back if you care about native.
+- **`NativeRuntimeHints` registers reflection Spring AOT can't see.** Thymeleaf evaluates template expressions via SpEL reflection at runtime, so every type whose methods a template calls must be registered — your records, and JDK types like `Locale` or `List`. When a native page 500s with `MissingReflectionRegistrationError`, add the reported type there.
 
 ---
 

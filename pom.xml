@@ -73,10 +73,6 @@
             <artifactId>vite-spring-boot-thymeleaf</artifactId>
             <version>2.0.1</version>
         </dependency>
-        <dependency>
-            <groupId>nz.net.ultraq.thymeleaf</groupId>
-            <artifactId>thymeleaf-layout-dialect</artifactId>
-        </dependency>
         <!-- Web dependencies -->
         <dependency>
             <groupId>org.webjars</groupId>
@@ -134,6 +130,10 @@
                         </path>
                     </annotationProcessorPaths>
                 </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.graalvm.buildtools</groupId>
+                <artifactId>native-maven-plugin</artifactId>
             </plugin>
             <plugin>
                 <groupId>org.springframework.boot</groupId>

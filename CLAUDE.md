@@ -76,6 +76,13 @@ The `notes` feature exists to demonstrate the conventions, not to ship. Keep it 
 3. Update the "reference implementation" pointer in this file to the real feature.
 4. `./mvnw verify` must stay green after removal — nothing else may depend on the example.
 
+## GraalVM native image
+
+`./mvnw -Pnative native:compile` produces a native binary (needs GraalVM JDK 25, gcc, zlib1g-dev). Two rules keep it working:
+
+1. **Never add Groovy-based dependencies** (e.g. `thymeleaf-layout-dialect`) — Groovy breaks GraalVM native builds. Layouts use plain Thymeleaf fragment composition (`layout/main.html` fragment + `th:replace` with fragment arguments in pages) for exactly this reason.
+2. **Register template-visible types in `NativeRuntimeHints`**: Thymeleaf resolves template expressions through SpEL reflection, invisible to Spring AOT. Any record or JDK type whose methods a template calls (`note.text()`, `notes.isEmpty()`, `#locale.toLanguageTag()`) must be registered there, or the page fails at render time in native only. When adding a template that touches new types, add hints for them.
+
 ## Build guardrails
 
 - **Error Prone + NullAway** run on every compile (config in `pom.xml`, JVM exports in `.mvn/jvm.config`). NullAway violations are compile errors.

@@ -1,10 +1,9 @@
 <!DOCTYPE html>
 <html lang="en"
       xmlns:th="http://www.thymeleaf.org"
-      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
-      layout:decorate="~{layout/main}">
+      th:replace="~{layout/main :: main(~{:: #content}, ~{:: #page-scripts})}">
 <body>
-<div layout:fragment="content">
+<div id="content">
     <section class="p-4 flex flex-col gap-4" hx-ext="ws" ws-connect="/ws/notes">
         <h1 class="text-2xl font-bold">Notes</h1>
         <p class="text-sm opacity-70">
@@ -14,8 +13,8 @@
         <div th:replace="~{notes/list :: notes-list}"></div>
     </section>
 </div>
-<th:block layout:fragment="script-content">
-    <!-- Add additional scripts there that are only needed for this page (Application wide scripts should be added in layout/main.html) -->
+<th:block id="page-scripts">
+    <!-- Page-specific scripts go here (application-wide scripts belong in layout/main.html) -->
 </th:block>
 </body>
 </html>
