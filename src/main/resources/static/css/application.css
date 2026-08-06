@@ -1,0 +1,6 @@
+@import "tailwindcss";
+@source "../../templates";
+@plugin "@tailwindcss/container-queries";
+@plugin "daisyui";
+@plugin "@tailwindcss/forms";
+@plugin "@tailwindcss/typography";

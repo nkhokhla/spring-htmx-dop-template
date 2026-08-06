@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<body>
+<!-- Rendered on page load and re-rendered for every WebSocket broadcast. When
+     broadcast, hx-swap-oob makes the htmx ws extension replace the element with
+     the same id in every connected browser. -->
+<div th:fragment="notes-list"
+     id="notes-list"
+     th:attr="hx-swap-oob=${oob == true ? 'true' : null}"
+     class="flex flex-col gap-2 max-w-md">
+    <p th:if="${notes.isEmpty()}" class="text-sm opacity-70">No notes yet. Add the first one!</p>
+    <div th:each="note : ${notes}" class="card bg-base-200">
+        <div class="card-body py-3 px-4">
+            <span th:text="${note.text()}"></span>
+        </div>
+    </div>
+</div>
+</body>
+</html>
