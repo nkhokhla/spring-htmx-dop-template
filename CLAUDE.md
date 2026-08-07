@@ -30,6 +30,16 @@ This codebase follows the four DOP principles (see [Data Oriented Programming in
 - Nullness is part of the type system: every package is `@NullMarked` (JSpecify) and NullAway fails the build on violations. **Every new package needs a `package-info.java` with `@NullMarked`.** Where absence is genuinely part of the model, mark it explicitly with `@Nullable` — but prefer restructuring the data (e.g. a sealed hierarchy) over nullable members.
 - Prefer distinct sealed variants over boolean flags or enum + nullable-fields combinations.
 
+### Evolving records, and classes that can't quite be records
+
+Conventions aligned with where Java's DOP support is heading ([carrier classes](https://mail.openjdk.org/pipermail/amber-spec-experts/2026-January/004307.html), `with` reconstruction — JEP 468). Following them costs nothing today and makes that future adoption mechanical:
+
+- **Evolve a record by appending components at the end only** — never reorder or insert. Keep an explicit constructor with the old shape delegating to the canonical one with defaults. Reordering breaks every deconstruction pattern positionally and silently when component types coincide.
+- **All invariants live in the compact (canonical) constructor; every other constructor or factory delegates to it.** One choke point means no invalid instance can exist through any path — and it is what will make `with`-style reconstruction safe when it arrives.
+- **Do not hand-write `withX(...)` copy methods on records** unless a call site genuinely needs one; when you do, implement them via the canonical constructor, never by field-copying around it.
+- **When a class can't be a record** (mutable, cached, or derived state; representation differs from API), still shape it like one: record-style accessors (`x()`, not `getX()`), one canonical constructor matching the full state description, `equals`/`hashCode`/`toString` over exactly that state. Such a class remains honest data today and becomes a carrier class by deleting boilerplate when they ship.
+- For public API boundaries, prefer a **sealed interface with a private record implementation** (`public sealed interface Pair<T,U> permits PairImpl`) — consumers get pattern matching without coupling to the representation.
+
 ### 4. Separate operations from data
 
 - Services return **sealed result types** (`SaveNoteResult` = `Saved` | `EmptyText` | `TextTooLong`) instead of throwing exceptions for expected outcomes. Exceptions are only for bugs and infrastructure failures.

@@ -8,7 +8,7 @@ A Spring Boot + htmx project template that practices **Data Oriented Programming
 | Frontend | Thymeleaf + htmx (with `ws` extension), Tailwind CSS 4 + daisyUI, Vite, bun |
 | Guardrails | Error Prone + NullAway (JSpecify `@NullMarked`), ArchUnit, `-Xlint:all` |
 
-Based on the principles in [Data Oriented Programming in Java](https://nejckorasa.github.io/posts/data-oriented-programming-in-java/) and [Inside Java's DOP v1.1](https://inside.java/2024/05/23/dop-v1-1-introduction/):
+Based on the principles in [Data Oriented Programming in Java](https://nejckorasa.github.io/posts/data-oriented-programming-in-java/) and [Inside Java's DOP v1.1](https://inside.java/2024/05/23/dop-v1-1-introduction/), with conventions aligned to the [next DOP feature arc (carrier classes)](https://mail.openjdk.org/pipermail/amber-spec-experts/2026-January/004307.html):
 
 1. **Model data immutably and transparently** — records everywhere, no Lombok
 2. **Model the data, the whole data, and nothing but the data** — behavior lives in services, not in the data
