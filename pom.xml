@@ -115,6 +115,19 @@
         </dependency>
     </dependencies>
     <build>
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+            </resource>
+            <!-- Native-image metadata for generated JTE template classes (emitted by the
+                 jte NativeResourcesExtension into the generated-sources tree) -->
+            <resource>
+                <directory>${project.build.directory}/generated-sources/jte</directory>
+                <includes>
+                    <include>META-INF/**</include>
+                </includes>
+            </resource>
+        </resources>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -148,7 +161,20 @@
                 <configuration>
                     <sourceDirectory>${project.basedir}/src/main/jte</sourceDirectory>
                     <contentType>Html</contentType>
+                    <!-- Emits native-image metadata for the generated template classes -->
+                    <extensions>
+                        <extension>
+                            <className>gg.jte.nativeimage.NativeResourcesExtension</className>
+                        </extension>
+                    </extensions>
                 </configuration>
+                <dependencies>
+                    <dependency>
+                        <groupId>gg.jte</groupId>
+                        <artifactId>jte-native-resources</artifactId>
+                        <version>${jte.version}</version>
+                    </dependency>
+                </dependencies>
                 <executions>
                     <execution>
                         <phase>generate-sources</phase>

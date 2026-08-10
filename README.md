@@ -71,7 +71,7 @@ Requires JDK 25 and bash+curl (for the self-downloading Tailwind binary; on Wind
 
 ## Native image & AOT
 
-The v2 stack is dramatically friendlier to GraalVM than template engines with runtime reflection: JTE templates are precompiled classes, so **this branch needs no reflection hints at all** (v1's `NativeRuntimeHints` is gone). `./mvnw -Pnative native:compile` needs a GraalVM JDK 25, `gcc`, and `zlib1g-dev`. For a cheaper startup boost on the JVM, use the JDK 25 AOT cache (Project Leyden):
+The v2 stack is dramatically friendlier to GraalVM than template engines with runtime reflection: JTE templates are precompiled classes, so **this branch has no hand-written reflection hints at all** (v1's `NativeRuntimeHints` is gone — the only metadata is emitted automatically per template by JTE's `NativeResourcesExtension`, already wired into the build). Verified end to end: 0.4s startup, all sealed outcomes, SSE, SQLite persistence. `./mvnw -Pnative native:compile` needs a GraalVM JDK 25, `gcc`, and `zlib1g-dev`. For a cheaper startup boost on the JVM, use the JDK 25 AOT cache (Project Leyden):
 
 ```bash
 ./mvnw package
