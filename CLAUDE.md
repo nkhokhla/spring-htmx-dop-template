@@ -85,6 +85,8 @@ com.example.demo.<feature>/
 
 Run `./mvnw test -Dtest=ArchitectureTest` after adding packages; violations fail the build.
 
+Persistence: the store is deliberately in-memory on this branch. When asked to add a database, follow [docs/add-persistence.md](docs/add-persistence.md) exactly — it keeps the guardrails intact (port in `application`, `JdbcClient` adapter in a new `persistence` package, rows parsed to records in one place). The `with-jdbc` branch is the verified reference implementation.
+
 ## htmx + WebSocket conventions
 
 - Each sealed result variant maps to its own htmx response: success and each failure render their own fragment (see `NoteController`). Fragments live in `templates/<feature>/`.
