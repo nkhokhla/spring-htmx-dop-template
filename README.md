@@ -44,7 +44,7 @@ Try adding a fourth variant to `SaveNoteResult`: the build breaks at every switc
 
 **The slice is disposable.** Build your first real feature by copying its structure, then delete it (steps in [CLAUDE.md](CLAUDE.md)).
 
-**Need a database?** The store is in-memory on purpose — `main` stays clone-and-run with zero infrastructure. When you need PostgreSQL, follow [docs/add-persistence.md](docs/add-persistence.md) (agent-executable recipe); a complete verified implementation lives on the [`with-jdbc` branch](https://github.com/nkhokhla/spring-htmx-dop-template/tree/with-jdbc).
+**Need a database?** The store is in-memory on purpose — `main` stays clone-and-run with zero infrastructure. When you need SQL, follow [docs/add-persistence.md](docs/add-persistence.md) (agent-executable recipe, MySQL reference with a trivial PostgreSQL swap); a complete verified implementation lives on the [`with-jdbc` branch](https://github.com/nkhokhla/spring-htmx-dop-template/tree/with-jdbc).
 
 ## Suggested workflow for a new project
 
