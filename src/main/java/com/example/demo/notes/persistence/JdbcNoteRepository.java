@@ -5,12 +5,17 @@ import com.example.demo.notes.domain.Note;
 import com.example.demo.notes.domain.NoteId;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.time.OffsetDateTime;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
+/**
+ * Storage conventions: ids as char(36) UUID text, timestamps as datetime(6)
+ * holding UTC wall-clock time — both converted here and nowhere else.
+ */
 @Repository
 class JdbcNoteRepository implements NoteRepository {
 
@@ -23,9 +28,9 @@ class JdbcNoteRepository implements NoteRepository {
     @Override
     public void save(Note note) {
         jdbc.sql("insert into note (id, text, created_at) values (:id, :text, :createdAt)")
-                .param("id", note.id().value())
+                .param("id", note.id().value().toString())
                 .param("text", note.text())
-                .param("createdAt", note.createdAt().atOffset(java.time.ZoneOffset.UTC))
+                .param("createdAt", LocalDateTime.ofInstant(note.createdAt(), ZoneOffset.UTC))
                 .update();
     }
 
@@ -39,8 +44,8 @@ class JdbcNoteRepository implements NoteRepository {
     /** The single place a database row becomes a domain record. */
     private static Note mapNote(ResultSet rs, int rowNum) throws SQLException {
         return new Note(
-                new NoteId(rs.getObject("id", UUID.class)),
+                new NoteId(UUID.fromString(rs.getString("id"))),
                 rs.getString("text"),
-                rs.getObject("created_at", OffsetDateTime.class).toInstant());
+                rs.getObject("created_at", LocalDateTime.class).toInstant(ZoneOffset.UTC));
     }
 }

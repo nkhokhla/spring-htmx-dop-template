@@ -8,14 +8,18 @@ import com.example.demo.notes.domain.NoteId;
 import java.time.Instant;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.boot.jdbc.test.autoconfigure.JdbcTest;
 import org.springframework.context.annotation.Import;
 
 /**
- * Verifies the row-to-record boundary against an embedded database. The real
- * datasource is PostgreSQL; keep the SQL in schema.sql and the adapter portable.
+ * Verifies the row-to-record boundary against embedded H2 in MySQL mode (the
+ * datasource from src/test/resources; Replace.NONE keeps it instead of the
+ * slice's default plain-H2 replacement). The real datasource is MySQL — keep
+ * the SQL in schema.sql portable across both.
  */
 @JdbcTest
+@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import(JdbcNoteRepository.class)
 class JdbcNoteRepositoryTest {
 
