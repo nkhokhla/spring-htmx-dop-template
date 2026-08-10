@@ -86,6 +86,7 @@ com.example.demo.<feature>/
 
 Run `./mvnw test -Dtest=ArchitectureTest` after adding packages; violations fail the build.
 
+<<<<<<< HEAD
 ## Persistence
 
 The database is a trust boundary, handled exactly like HTTP input:
@@ -95,6 +96,19 @@ The database is a trust boundary, handled exactly like HTTP input:
 - Deliberate choice: `JdbcClient`, **not Spring Data JDBC** — repositories via `ListCrudRepository` would need `@Id`/`@Version` on domain records (breaking domain framework-freedom) plus converter setup for `NoteId`. If you switch anyway, exempt `org.springframework.data.annotation..` in `ArchitectureTest` explicitly and use a `@Version` field so pre-assigned `NoteId`s insert correctly.
 - Runtime is MySQL (`application.properties`); tests run against embedded H2 (`src/test/resources/application.properties` — it shadows the main file, so repeat any needed keys there). Keep the SQL portable across both. Adapter changes get a `@JdbcTest` + `@Import(<adapter>.class)` slice test.
 - Schema lives in `schema.sql` (fine for a template); switch to Flyway or Liquibase migrations in a real project. Ordering and filtering belong in SQL (`order by created_at desc`), not in Java streams.
+=======
+## Modules (enforced by ModularityTest)
+
+Each top-level feature package (`notes`, …) is a **Spring Modulith module** (test-scoped dependency only — no runtime weight):
+
+- Nested packages (`domain`, `application`, `web`, …) are module-private. Another module may only use types placed in the module's base package. `ModularityTest.modulesRespectTheirBoundaries()` fails the build on leaks the compiler allows.
+- **Cross-module communication happens via record events**, published with `ApplicationEventPublisher` — never by injecting another module's service. The event record goes in the publisher's base package (its public API). If async/transactional delivery with an outbox is needed, add the runtime `spring-modulith-starter-core` + `@ApplicationModuleListener` then.
+- **Package-private by default.** A type becomes `public` only when another package genuinely needs it. Controllers, configs, and adapters are package-private (see `NoteController`, `WebSocketConfig`).
+- **Modules own their native hints**: template-visible types are registered in a module-internal `RuntimeHintsRegistrar` (`notes.web.NotesRuntimeHints`), imported from a module config. Root-level `NativeRuntimeHints` registers only third-party/JDK types — it must never reference a module's domain types (ModularityTest catches this).
+- `ModularityTest.writeArchitectureDocumentation()` regenerates C4/PlantUML module diagrams into `target/spring-modulith-docs` on every build — always-current architecture docs.
+
+Persistence: the store is deliberately in-memory on this branch. When asked to add a database, follow [docs/add-persistence.md](docs/add-persistence.md) exactly — it keeps the guardrails intact (port in `application`, `JdbcClient` adapter in a new `persistence` package, rows parsed to records in one place). The `with-jdbc` branch is the verified reference implementation.
+>>>>>>> main
 
 ## htmx + WebSocket conventions
 
@@ -107,9 +121,9 @@ The database is a trust boundary, handled exactly like HTTP input:
 The `notes` feature exists to demonstrate the conventions, not to ship. Keep it as the reference while the project has no real features yet; once the first real feature slice exists, delete the example and treat that feature as the reference instead:
 
 1. Delete `src/main/java/com/example/demo/notes/`, `src/test/java/com/example/demo/notes/`, and `src/main/resources/templates/notes/`.
-2. Remove the notes section from `index.html` and the `NoteService` dependency from `HomeController`; drop the `Clock` bean if nothing else uses it.
+2. Remove the notes section from `index.html` and give your first real feature's controller the `GET /` mapping (it lives in `NoteController` now); drop the `Clock` bean if nothing else uses it.
 3. Update the "reference implementation" pointer in this file to the real feature.
-4. `./mvnw verify` must stay green after removal — nothing else may depend on the example.
+4. `./mvnw verify` must stay green after removal — nothing else may depend on the example (ModularityTest and ArchitectureTest will tell you if it does).
 
 ## GraalVM native image
 

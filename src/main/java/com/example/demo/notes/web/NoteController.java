@@ -6,18 +6,25 @@ import com.example.demo.notes.domain.SaveNoteResult.Saved;
 import com.example.demo.notes.domain.SaveNoteResult.TextTooLong;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
 @Controller
-public class NoteController {
+class NoteController {
 
     private final NoteService noteService;
     private final NotesBroadcaster notesBroadcaster;
 
-    public NoteController(NoteService noteService, NotesBroadcaster notesBroadcaster) {
+    NoteController(NoteService noteService, NotesBroadcaster notesBroadcaster) {
         this.noteService = noteService;
         this.notesBroadcaster = notesBroadcaster;
+    }
+
+    @GetMapping("/")
+    public String index(Model model) {
+        model.addAttribute("notes", noteService.all());
+        return "index";
     }
 
     /**
