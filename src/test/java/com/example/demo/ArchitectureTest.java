@@ -50,6 +50,8 @@ class ArchitectureTest {
     @ArchTest
     static final ArchRule no_widened_signatures_in_inner_layers = methods()
             .that().areDeclaredInClassesThat().resideInAnyPackage("..domain..", "..application..", "..persistence..")
+            // Spring AOT (native profile) writes CGLIB proxy classes into target/classes — not our code
+            .and().areDeclaredInClassesThat().haveNameNotMatching(".*\\$\\$.*")
             .and().doNotHaveName("equals")
             .should(notUseWidenedTypesInSignature())
             .because("passing Object/Map/JsonNode where a domain type exists discards type evidence");
