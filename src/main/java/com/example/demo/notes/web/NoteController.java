@@ -9,22 +9,28 @@ import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 @Controller
 class NoteController {
 
     private final NoteService noteService;
-    private final NotesBroadcaster notesBroadcaster;
+    private final NotesEventStream notesEventStream;
 
-    NoteController(NoteService noteService, NotesBroadcaster notesBroadcaster) {
+    NoteController(NoteService noteService, NotesEventStream notesEventStream) {
         this.noteService = noteService;
-        this.notesBroadcaster = notesBroadcaster;
+        this.notesEventStream = notesEventStream;
     }
 
     @GetMapping("/")
     public String index(Model model) {
         model.addAttribute("notes", noteService.all());
         return "index";
+    }
+
+    @GetMapping("/notes/events")
+    public SseEmitter events() {
+        return notesEventStream.subscribe();
     }
 
     /**
@@ -36,8 +42,8 @@ class NoteController {
     public String save(@RequestParam("text") String text, Model model) {
         return switch (noteService.save(text)) {
             case Saved _ -> {
-                notesBroadcaster.broadcastNotes(noteService.all());
-                yield "notes/form :: note-form";
+                notesEventStream.broadcastNotes(noteService.all());
+                yield "notes/form";
             }
             case EmptyText() -> formWithError(model, text, "Note text must not be empty.");
             case TextTooLong(int maxLength, int actualLength) ->
@@ -49,6 +55,6 @@ class NoteController {
     private String formWithError(Model model, String text, String error) {
         model.addAttribute("text", text);
         model.addAttribute("error", error);
-        return "notes/form :: note-form";
+        return "notes/form";
     }
 }

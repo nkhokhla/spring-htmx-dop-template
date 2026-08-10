@@ -32,9 +32,12 @@ build/
 ### VS Code ###
 .vscode/
 
-# Excludes for package managers
-node_modules
-node
 
-# Bun runtime installed by frontend-maven-plugin
-bun/
+# SQLite database files
+*.db
+
+# Tailwind standalone binary cache
+tools/tailwindcss-*
+
+# JTE generated sources marker
+jte-classes/

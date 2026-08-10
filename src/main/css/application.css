@@ -1,0 +1,4 @@
+@import "tailwindcss";
+
+/* Scan JTE templates for utility classes */
+@source "../jte";

@@ -9,12 +9,30 @@ import com.example.demo.notes.domain.SaveNoteResult.TextTooLong;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class NoteServiceTest {
 
-    private final NoteService noteService =
-            new NoteService(Clock.fixed(Instant.parse("2026-08-06T12:00:00Z"), ZoneOffset.UTC));
+    /** Five-line in-memory port: DOP keeps the service unit-testable without a database. */
+    private static final class InMemoryNotes implements NoteRepository {
+        private final List<Note> notes = new ArrayList<>();
+
+        @Override
+        public void save(Note note) {
+            notes.add(note);
+        }
+
+        @Override
+        public List<Note> all() {
+            return notes.stream().sorted(Comparator.comparing(Note::createdAt).reversed()).toList();
+        }
+    }
+
+    private final NoteService noteService = new NoteService(
+            new InMemoryNotes(), Clock.fixed(Instant.parse("2026-08-06T12:00:00Z"), ZoneOffset.UTC));
 
     @Test
     void savingValidTextReturnsSavedNote() {

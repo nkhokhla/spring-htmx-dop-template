@@ -29,7 +29,8 @@ class ArchitectureTest {
     static final ArchRule domain_is_framework_free = noClasses()
             .that().resideInAPackage("..domain..")
             .should().dependOnClassesThat()
-            .resideInAnyPackage("org.springframework..", "jakarta.servlet..", "..application..", "..web..")
+            .resideInAnyPackage("org.springframework..", "jakarta.servlet..", "java.sql..",
+                    "..application..", "..web..", "..persistence..")
             .because("domain data must stay plain: records and sealed types with no framework coupling");
 
     @ArchTest
@@ -48,7 +49,7 @@ class ArchitectureTest {
      */
     @ArchTest
     static final ArchRule no_widened_signatures_in_inner_layers = methods()
-            .that().areDeclaredInClassesThat().resideInAnyPackage("..domain..", "..application..")
+            .that().areDeclaredInClassesThat().resideInAnyPackage("..domain..", "..application..", "..persistence..")
             .and().doNotHaveName("equals")
             .should(notUseWidenedTypesInSignature())
             .because("passing Object/Map/JsonNode where a domain type exists discards type evidence");

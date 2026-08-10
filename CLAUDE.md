@@ -1,13 +1,14 @@
 # CLAUDE.md
 
-Spring Boot 4 + Thymeleaf + htmx template (generated with ttcli). Java 25, Tailwind CSS 4 + daisyUI via Vite (bun as package manager), WebSocket support. This template practices **Data Oriented Programming (DOP)** — read the conventions below before writing any Java code.
+Spring Boot 4 + JTE + htmx template (v2 stack). Java 25, virtual threads, SQLite persistence, SSE realtime, Tailwind CSS 4 standalone binary + shadcn-style Basecoat components (webjar) — no Node toolchain. This template practices **Data Oriented Programming (DOP)** — read the conventions below before writing any Java code.
 
 ## Commands
 
-- `./mvnw verify` — full build: compiles with Error Prone + NullAway, runs tests (including ArchUnit rules)
-- `./mvnw spring-boot:run` — run the app (http://localhost:8080)
-- `bun run dev` — Vite dev server with live reload (run alongside `spring-boot:run`)
-- `./mvnw test -Dtest=ArchitectureTest` — architecture rules only
+- `./mvnw verify` — full build: Error Prone + NullAway, JTE template compilation, Tailwind CSS, all tests
+- `./mvnw spring-boot:run` — run the app (http://localhost:8080); the SQLite database is the `demo.db` file
+- `./mvnw spring-boot:run -Dspring-boot.run.profiles=local` — dev mode: JTE hot-reloads templates from `src/main/jte`
+- `tools/tailwind.sh -i src/main/css/application.css -o target/classes/static/css/application.css --watch` — CSS watch during styling work
+- `./mvnw test -Dtest=ArchitectureTest` / `-Dtest=ModularityTest` — architecture / module rules only
 
 ## Data Oriented Programming conventions
 
@@ -49,7 +50,7 @@ Conventions aligned with where Java's DOP support is heading ([carrier classes](
 
   ```java
   return switch (noteService.save(text)) {
-      case Saved _ -> { notesBroadcaster.broadcastNotes(noteService.all()); yield "notes/form :: note-form"; }
+      case Saved _ -> { notesEventStream.broadcastNotes(noteService.all()); yield "notes/form"; }
       case EmptyText() -> formWithError(model, text, "Note text must not be empty.");
       case TextTooLong(int max, int actual) -> formWithError(model, text, "Limit is %d, got %d.".formatted(max, actual));
   };
@@ -75,11 +76,12 @@ Review triggers: `Object` parameters or returns outside a real boundary; sealed 
 ```
 com.example.demo.<feature>/
 ├── domain/        records + sealed types only; NO Spring/framework imports
-├── application/   services operating on domain data
-└── web/           controllers, WebSocket handlers; maps outcomes to views
+├── application/   services operating on domain data + persistence ports
+├── persistence/   JdbcClient adapters implementing the ports
+└── web/           controllers, SSE streams; maps outcomes to views
 ```
 
-- `..domain..` must not depend on Spring, Servlet APIs, or the `application`/`web` layers.
+- `..domain..` must not depend on Spring, Servlet APIs, JDBC, or the `application`/`persistence`/`web` layers.
 - All fields in `..domain..` must be final.
 - No field injection anywhere — constructor injection only.
 
@@ -92,32 +94,40 @@ Each top-level feature package (`notes`, …) is a **Spring Modulith module** (t
 - Nested packages (`domain`, `application`, `web`, …) are module-private. Another module may only use types placed in the module's base package. `ModularityTest.modulesRespectTheirBoundaries()` fails the build on leaks the compiler allows.
 - **Cross-module communication happens via record events**, published with `ApplicationEventPublisher` — never by injecting another module's service. The event record goes in the publisher's base package (its public API). If async/transactional delivery with an outbox is needed, add the runtime `spring-modulith-starter-core` + `@ApplicationModuleListener` then.
 - **Package-private by default.** A type becomes `public` only when another package genuinely needs it. Controllers, configs, and adapters are package-private (see `NoteController`, `WebSocketConfig`).
-- **Modules own their native hints**: template-visible types are registered in a module-internal `RuntimeHintsRegistrar` (`notes.web.NotesRuntimeHints`), imported from a module config. Root-level `NativeRuntimeHints` registers only third-party/JDK types — it must never reference a module's domain types (ModularityTest catches this).
 - `ModularityTest.writeArchitectureDocumentation()` regenerates C4/PlantUML module diagrams into `target/spring-modulith-docs` on every build — always-current architecture docs.
 
-Persistence: the store is deliberately in-memory on this branch. When asked to add a database, follow [docs/add-persistence.md](docs/add-persistence.md) exactly — it keeps the guardrails intact (port in `application`, `JdbcClient` adapter in a new `persistence` package, rows parsed to records in one place). The `with-jdbc` branch is the verified reference implementation.
+## Persistence (SQLite)
 
-## htmx + WebSocket conventions
+The database is a trust boundary, handled exactly like HTTP input:
 
-- Each sealed result variant maps to its own htmx response: success and each failure render their own fragment (see `NoteController`). Fragments live in `templates/<feature>/`.
-- Shared state changes are pushed to all browsers via WebSocket: render the fragment server-side with `SpringTemplateEngine` and broadcast it; the htmx `ws` extension applies it as an out-of-band swap on the element with the matching `id` (see `NotesBroadcaster`, registered in `WebSocketConfig`). The broadcast variant of a fragment sets `hx-swap-oob="true"`; the page-load variant must not.
-- htmx core and the `ws` extension are webjars, loaded in `layout/main.html`.
+- The `application` layer defines a small **port** (`NoteRepository`: domain types in, domain types out). Services depend on the port — unit-testable with a five-line in-memory fake (see `NoteServiceTest`).
+- The `persistence` adapter implements the port with `JdbcClient` and explicit SQL. **A row becomes a domain record in exactly one place** — the adapter's row mapper. Storage conventions live there and nowhere else: SQLite stores ids as UUID text and timestamps as ISO-8601 UTC text (which sorts chronologically as plain text).
+- SQLite is the default because it needs zero infrastructure and is a legitimate production database. **Outgrowing it is a two-line swap** (driver dependency + datasource URL) plus dialect touches in `schema.sql` and the adapter — see README "Outgrowing SQLite"; the `with-jdbc` branch holds a verified MySQL reference.
+- Tests run against real SQLite (shared in-memory mode, `src/test/resources/application.properties` — it shadows the main file, repeat any keys tests need). Adapter changes get a `@JdbcTest` + `Replace.NONE` + `@Import(<adapter>.class)` slice test.
+- Schema lives in `schema.sql`; switch to Flyway/Liquibase in a real project. Ordering and filtering belong in SQL, not Java streams.
+
+## JTE templates + htmx + SSE conventions
+
+- Templates live in `src/main/jte/` and are **compiled to Java classes at build time** (jte-maven-plugin): every template declares typed `@param`s and the compiler checks them against your records — a template referencing a renamed component fails the build. There is NO template reflection: no SpEL, no runtime hints, nothing to register for native.
+- Each sealed result variant maps to its own htmx response: success and each failure render their own template (see `NoteController`). One template per fragment (`notes/form.jte`, `notes/list.jte`); layout via `layout/main.jte` taking `gg.jte.Content` parameters.
+- Shared state changes are pushed to all browsers over **SSE**: `NotesEventStream` renders the list template with the injected `gg.jte.TemplateEngine` and sends it as a named event; the htmx `sse` extension (`hx-ext="sse"`, `sse-connect`, `sse-swap` + `hx-swap="outerHTML"`) replaces the subscribed element. Same template for initial render and broadcasts — no out-of-band variants needed. SSE is plain HTTP: no WebSocket config, no origin handling.
+- Styling: shadcn-style component classes come from the Basecoat webjar (`btn`, `btn-primary`, `input`, `card`, …); layout utilities from Tailwind (standalone binary, scans `src/main/jte` via `@source`). No Node, no npm — don't add them back.
 
 ## The example slice is disposable
 
 The `notes` feature exists to demonstrate the conventions, not to ship. Keep it as the reference while the project has no real features yet; once the first real feature slice exists, delete the example and treat that feature as the reference instead:
 
-1. Delete `src/main/java/com/example/demo/notes/`, `src/test/java/com/example/demo/notes/`, and `src/main/resources/templates/notes/`.
-2. Remove the notes section from `index.html` and give your first real feature's controller the `GET /` mapping (it lives in `NoteController` now); drop the `Clock` bean if nothing else uses it.
+1. Delete `src/main/java/com/example/demo/notes/`, `src/test/java/com/example/demo/notes/`, and `src/main/jte/notes/`.
+2. Remove the notes section from `index.jte` and give your first real feature's controller the `GET /` mapping (it lives in `NoteController` now); drop the `Clock` bean and the `note` table in `schema.sql` if nothing else uses them.
 3. Update the "reference implementation" pointer in this file to the real feature.
 4. `./mvnw verify` must stay green after removal — nothing else may depend on the example (ModularityTest and ArchitectureTest will tell you if it does).
 
 ## GraalVM native image
 
-`./mvnw -Pnative native:compile` produces a native binary (needs GraalVM JDK 25, gcc, zlib1g-dev). Two rules keep it working:
+`./mvnw -Pnative native:compile` produces a native binary (needs GraalVM JDK 25, gcc, zlib1g-dev). The v2 stack needs **no reflection hints**: JTE templates are precompiled classes (no SpEL, no template reflection), so there is no `NativeRuntimeHints` and nothing to register when adding templates. Keep it that way:
 
-1. **Never add Groovy-based dependencies** (e.g. `thymeleaf-layout-dialect`) — Groovy breaks GraalVM native builds. Layouts use plain Thymeleaf fragment composition (`layout/main.html` fragment + `th:replace` with fragment arguments in pages) for exactly this reason.
-2. **Register template-visible types in `NativeRuntimeHints`**: Thymeleaf resolves template expressions through SpEL reflection, invisible to Spring AOT. Any record or JDK type whose methods a template calls (`note.text()`, `notes.isEmpty()`, `#locale.toLanguageTag()`) must be registered there, or the page fails at render time in native only. When adding a template that touches new types, add hints for them.
+1. **Never add Groovy-based dependencies** — Groovy breaks GraalVM native builds.
+2. **Prefer reflection-free libraries**; if a dependency does need reflection in native, register hints in a module-owned `RuntimeHintsRegistrar` rather than a root-level catch-all.
 
 ## Build guardrails
 

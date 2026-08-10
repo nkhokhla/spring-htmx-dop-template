@@ -7,19 +7,17 @@ import com.example.demo.notes.domain.SaveNoteResult.EmptyText;
 import com.example.demo.notes.domain.SaveNoteResult.Saved;
 import com.example.demo.notes.domain.SaveNoteResult.TextTooLong;
 import java.time.Clock;
-import java.util.Comparator;
 import java.util.List;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 import org.springframework.stereotype.Service;
 
 @Service
 public class NoteService {
 
-    private final ConcurrentMap<NoteId, Note> store = new ConcurrentHashMap<>();
+    private final NoteRepository noteRepository;
     private final Clock clock;
 
-    public NoteService(Clock clock) {
+    public NoteService(NoteRepository noteRepository, Clock clock) {
+        this.noteRepository = noteRepository;
         this.clock = clock;
     }
 
@@ -32,13 +30,11 @@ public class NoteService {
             return new TextTooLong(Note.MAX_TEXT_LENGTH, trimmed.length());
         }
         var note = new Note(NoteId.random(), trimmed, clock.instant());
-        store.put(note.id(), note);
+        noteRepository.save(note);
         return new Saved(note);
     }
 
     public List<Note> all() {
-        return store.values().stream()
-                .sorted(Comparator.comparing(Note::createdAt).reversed())
-                .toList();
+        return noteRepository.all();
     }
 }
