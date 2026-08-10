@@ -73,6 +73,19 @@ The template is set up so agents inherit the conventions instead of needing them
 
 Requires JDK 25. Bun is installed locally by the Maven build; installing [bun](https://bun.sh) globally is only needed for `bun run dev`.
 
+## Faster JVM startup: AOT cache (Project Leyden)
+
+Before reaching for native image, there is a cheaper option: the JDK 25 AOT cache. No reflection hints, no extra build plugins, no native toolchain — three commands against the regular jar (measured here: ~30% faster startup):
+
+```bash
+./mvnw package
+java -Djarmode=tools -jar target/demo-0.0.1-SNAPSHOT.jar extract --destination target/aot
+cd target/aot && java -XX:AOTCacheOutput=demo.aot -Dspring.context.exit=onRefresh -jar demo-0.0.1-SNAPSHOT.jar
+java -XX:AOTCache=demo.aot -jar demo-0.0.1-SNAPSHOT.jar
+```
+
+The training run (third command) starts the context, records the class/object profile, writes the cache, and exits. Ship the extracted directory plus the `.aot` file together. Use this when native's build cost or hint maintenance isn't worth it; use native when you need ~0.1s cold starts or minimal memory.
+
 ## GraalVM native image
 
 The template compiles to a native binary (verified end to end: pages, all sealed outcomes, WebSocket broadcasts) and starts in ~0.1s:

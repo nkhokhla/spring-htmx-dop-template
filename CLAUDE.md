@@ -43,6 +43,8 @@ Conventions aligned with where Java's DOP support is heading ([carrier classes](
 ### 4. Separate operations from data
 
 - Services return **sealed result types** (`SaveNoteResult` = `Saved` | `EmptyText` | `TextTooLong`) instead of throwing exceptions for expected outcomes. Exceptions are only for bugs and infrastructure failures.
+- **Expected outcomes vs. infrastructure faults**: sealed results model outcomes the domain *expects* (validation failure, duplicate, not-found). Transient infrastructure faults (network, downstream outage) stay exceptions — handle them at the adapter with Spring Framework 7's core resilience annotations (`@EnableResilientMethods`, then `@Retryable`/`@ConcurrencyLimit` on the outbound method). Don't model retryable faults as sealed variants, and don't retry domain outcomes.
+- **Outbound HTTP uses HTTP interface clients** (`@GetExchange` interfaces registered via `@ImportHttpServices`), returning records — never a raw `RestClient` call materializing `Map`s. This keeps the type-discipline rule intact at the outbound boundary: JSON binds to records at the edge.
 - Callers handle results with **exhaustive `switch` expressions using record deconstruction**:
 
   ```java
