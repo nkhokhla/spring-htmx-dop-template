@@ -44,6 +44,23 @@ Templates live in `src/main/jte/` with declared `@param` types — the compiler 
 
 The page binds the input to a `$text` signal (`data-bind:text`) and submits via `data-on:submit="@post('/notes')"` — Datastar sends the signals as JSON and expects an SSE stream back. The server answers with **signal patches** for ephemeral view state (clear the input, set `$error` — rendered by `data-show`/`data-text`, so there is *no form template at all*) and broadcasts **element patches** for domain data (the JTE-rendered list, morphed by id into every tab connected via `data-init="@get('/notes/events')"`). One mechanism for request/response *and* realtime; the [Gadnex jte-datastar starter](https://github.com/Gadnex/jte-datastar-spring-boot-starter) renders JTE templates straight into patch events (`datastar.patchElements(emitters).template("notes/list").attribute("notes", notes).emit()`). It is a small, young project — if it ever goes unmaintained, its ~10 classes are trivially inlined.
 
+## Datastar or htmx?
+
+The [`htmx` branch](https://github.com/nkhokhla/spring-htmx-dop-template/tree/htmx) preserves this exact template with htmx + the SSE extension instead of Datastar. Everything else is identical — JTE, SQLite, Tailwind, Basecoat, every guardrail — the two differ only in the web transport layer (~11 files). Both are verified end to end, including native images. An honest comparison from building both:
+
+**Pick Datastar (`main`) when:**
+- **Realtime is core to the app.** This is the deciding factor. Datastar's one wire protocol serves request/response *and* broadcast — every future feature gets multi-tab live updates with zero extra machinery. In htmx, realtime is a bolted-on extension you re-wire per feature.
+- You like ephemeral view state as **signals** (input contents, error text patched by the server) — it deleted our form template entirely, and templates carry no transport attributes (pure markup + an `id`).
+- You accept a younger ecosystem (Datastar v1 is from 2025; the JTE integration is a small single-maintainer starter, trivially inlineable).
+
+**Pick htmx (branch) when:**
+- The app is mostly **request/response CRUD** with little or no realtime — there the htmx version is genuinely the simpler of the two.
+- You want **maximum Spring-MVC idiom**: controllers return view names; no `SseEmitter` in a plain POST, no imperative `emit()`/`complete()`.
+- "The DOM is the state" appeals — htmx has no client-side signal store to reason about.
+- You value boring maturity: htmx is everywhere, stable, and exhaustively documented.
+
+What's *not* a differentiator: DOP fit (the sealed-result exhaustive switch survived the migration untouched), native image support, performance at this scale, or code size (the diff was +111/−99 lines — a wash; the elegance difference is structural, not quantitative).
+
 ## Outgrowing SQLite
 
 SQLite is the default because a template should run on clone — and it is a real production database for a large class of apps. When you outgrow it, the port/adapter design makes the move a **two-line swap** plus SQL dialect touches:
@@ -87,4 +104,4 @@ java -XX:AOTCache=demo.aot -jar demo-0.0.1-SNAPSHOT.jar
 
 ---
 
-Earlier stacks live in git history: v1 (Thymeleaf, htmx, Vite/bun, WebSocket, daisyUI) and the `with-jdbc` MySQL branch. DOP references: [jitterted/tdd-game](https://github.com/jitterted/tdd-game), [Suigi/event-sourced-tic-tac-toe](https://github.com/Suigi/event-sourced-tic-tac-toe), [zodac/diurnal](https://github.com/zodac/diurnal).
+Variants: the [`htmx` branch](https://github.com/nkhokhla/spring-htmx-dop-template/tree/htmx) (same template, htmx transport) and the [`with-jdbc` branch](https://github.com/nkhokhla/spring-htmx-dop-template/tree/with-jdbc) (MySQL reference, v1-era stack); the original v1 stack (Thymeleaf, Vite/bun, WebSocket, daisyUI) lives in git history. DOP references: [jitterted/tdd-game](https://github.com/jitterted/tdd-game), [Suigi/event-sourced-tic-tac-toe](https://github.com/Suigi/event-sourced-tic-tac-toe), [zodac/diurnal](https://github.com/zodac/diurnal).
