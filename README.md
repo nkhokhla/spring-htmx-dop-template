@@ -1,4 +1,6 @@
-# spring-htmx-dop-template (v2)
+# spring-htmx-dop-template — `htmx` branch
+
+> This branch is the **htmx variant** of the template. `main` uses [Datastar](https://data-star.dev) instead; everything else (JTE, SQLite, Tailwind standalone, Basecoat, all guardrails) is identical — the two differ only in the web transport layer (~11 files). See "[Datastar or htmx?](https://github.com/nkhokhla/spring-htmx-dop-template#datastar-or-htmx)" on `main` for how to choose. Pick this branch when you want maximum Spring-MVC idiom (controllers return view names), the boring maturity of htmx, and little or no realtime beyond what the SSE extension covers.
 
 A Spring Boot + htmx template that practices **Data Oriented Programming** — enforced with compiler-level guardrails — on a deliberately collapsed stack: typed templates, zero-infrastructure persistence, realtime over plain HTTP, and **no Node toolchain**. Inspired by the integrated spirit of Convex/Lakebed and the consolidation spirit of Vite+, kept 100% Spring.
 
