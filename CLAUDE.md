@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Spring Boot 4 + JTE + htmx template (v2 stack). Java 25, virtual threads, SQLite persistence, SSE realtime, Tailwind CSS 4 standalone binary + shadcn-style Basecoat components (webjar) — no Node toolchain. This template practices **Data Oriented Programming (DOP)** — read the conventions below before writing any Java code.
+Spring Boot 4 + JTE + Datastar template. Java 25, virtual threads, SQLite persistence, SSE realtime, Tailwind CSS 4 standalone binary + shadcn-style Basecoat components (webjar) — no Node toolchain. This template practices **Data Oriented Programming (DOP)** — read the conventions below before writing any Java code.
 
 ## Commands
 
@@ -49,11 +49,14 @@ Conventions aligned with where Java's DOP support is heading ([carrier classes](
 - Callers handle results with **exhaustive `switch` expressions using record deconstruction**:
 
   ```java
-  return switch (noteService.save(text)) {
-      case Saved _ -> { notesEventStream.broadcastNotes(noteService.all()); yield "notes/form"; }
-      case EmptyText() -> formWithError(model, text, "Note text must not be empty.");
-      case TextTooLong(int max, int actual) -> formWithError(model, text, "Limit is %d, got %d.".formatted(max, actual));
-  };
+  switch (noteService.save(signals.textOrEmpty())) {
+      case Saved _ -> {
+          notesEventStream.broadcastNotes(noteService.all());                     // element patch to all tabs
+          datastar.patchSignals(emitter).signal("text", "").signal("error", "").emit(); // clear caller's form
+      }
+      case EmptyText() -> patchError(emitter, "Note text must not be empty.");
+      case TextTooLong(int max, int actual) -> patchError(emitter, "Limit is %d, got %d.".formatted(max, actual));
+  }
   ```
 
 - **Never write a `default ->` branch in a switch over a sealed type or enum.** A default silently disables the compiler's exhaustiveness check — the whole point is that adding a new variant breaks compilation at every call site until it is handled. This applies to test code too.
@@ -106,11 +109,15 @@ The database is a trust boundary, handled exactly like HTTP input:
 - Tests run against real SQLite (shared in-memory mode, `src/test/resources/application.properties` — it shadows the main file, repeat any keys tests need). Adapter changes get a `@JdbcTest` + `Replace.NONE` + `@Import(<adapter>.class)` slice test.
 - Schema lives in `schema.sql`; switch to Flyway/Liquibase in a real project. Ordering and filtering belong in SQL, not Java streams.
 
-## JTE templates + htmx + SSE conventions
+## JTE + Datastar conventions
 
-- Templates live in `src/main/jte/` and are **compiled to Java classes at build time** (jte-maven-plugin): every template declares typed `@param`s and the compiler checks them against your records — a template referencing a renamed component fails the build. There is NO template reflection: no SpEL, no runtime hints, nothing to register for native.
-- Each sealed result variant maps to its own htmx response: success and each failure render their own template (see `NoteController`). One template per fragment (`notes/form.jte`, `notes/list.jte`); layout via `layout/main.jte` taking `gg.jte.Content` parameters.
-- Shared state changes are pushed to all browsers over **SSE**: `NotesEventStream` renders the list template with the injected `gg.jte.TemplateEngine` and sends it as a named event; the htmx `sse` extension (`hx-ext="sse"`, `sse-connect`, `sse-swap` + `hx-swap="outerHTML"`) replaces the subscribed element. Same template for initial render and broadcasts — no out-of-band variants needed. SSE is plain HTTP: no WebSocket config, no origin handling.
+- Templates live in `src/main/jte/` and are **compiled to Java classes at build time** (jte-maven-plugin): every template declares typed `@param`s and the compiler checks them against your records — a template referencing a renamed component fails the build. There is NO template reflection: no SpEL, no runtime hints, nothing to register for native (JTE's `NativeResourcesExtension` covers the generated classes).
+- **Two kinds of state, two kinds of patch — both server-authoritative:**
+  - *Domain data* (collections, records) is server-rendered JTE and pushed as **element patches**: `datastar.patchElements(emitters).template("notes/list").attribute("notes", notes).emit()` (Gadnex starter). Datastar morphs the element with the matching `id` in every connected tab. Same template for initial render and patches — never write a second variant.
+  - *Ephemeral view state* (input contents, error message, loading flags) lives in **signals** and is patched back to the caller: `datastar.patchSignals(emitter).signal("error", …)`. Rendered declaratively (`data-show`, `data-text`) — no template needed for it.
+- **Signals arriving at the server are a raw trust boundary**: `@post` sends them as JSON; bind them to a small record (`SaveNoteSignals`) — the typed parse-once point — and annotate the controller with `@RegisterReflectionForBinding(<SignalsRecord>.class)` for native. Never read signals into a `Map`.
+- POST handlers return an `SseEmitter`: emit patches per sealed outcome, then `complete()`. Long-lived streams (`data-init="@get('…/events')"`) use `new SseEmitter(-1L)` and are tracked in a `Set` with removal on completion/timeout/error (see `NotesEventStream`).
+- The Datastar client is a single vendored script (`static/js/datastar.js`, version-pinned). Attribute syntax is v1: `data-bind:text`, `data-on:submit="@post('/notes')"` (submit's default is auto-prevented), `data-signals`, `data-init`.
 - Styling: shadcn-style component classes come from the Basecoat webjar (`btn`, `btn-primary`, `input`, `card`, …); layout utilities from Tailwind (standalone binary, scans `src/main/jte` via `@source`). No Node, no npm — don't add them back.
 
 ## The example slice is disposable

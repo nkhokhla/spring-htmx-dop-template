@@ -1,12 +1,12 @@
-# spring-htmx-dop-template (v2)
+# spring-htmx-dop-template
 
-A Spring Boot + htmx template that practices **Data Oriented Programming** — enforced with compiler-level guardrails — on a deliberately collapsed stack: typed templates, zero-infrastructure persistence, realtime over plain HTTP, and **no Node toolchain**. Inspired by the integrated spirit of Convex/Lakebed and the consolidation spirit of Vite+, kept 100% Spring.
+A Spring Boot + [Datastar](https://data-star.dev) template that practices **Data Oriented Programming** — enforced with compiler-level guardrails — on a deliberately collapsed stack: typed templates, zero-infrastructure persistence, realtime over plain HTTP, and **no Node toolchain**. Inspired by the integrated spirit of Convex/Lakebed and the consolidation spirit of Vite+, kept 100% Spring.
 
 | | |
 |---|---|
 | Backend | Spring Boot 4.1, Java 25, virtual threads |
 | Templates | **JTE** — compiled to Java classes at build time: typed params, no runtime reflection |
-| Frontend | htmx + SSE (webjars), Tailwind CSS 4 **standalone binary**, shadcn-style components via [Basecoat](https://basecoatui.com) (plain CSS webjar) |
+| Frontend | **Datastar** (one vendored 34 kB script — hypermedia + signals + SSE in one model), Tailwind CSS 4 **standalone binary**, shadcn-style components via [Basecoat](https://basecoatui.com) (plain CSS webjar) |
 | Database | **SQLite** — one file, zero servers ([outgrowing it](#outgrowing-sqlite) is a two-line swap) |
 | Guardrails | Error Prone + NullAway (JSpecify), ArchUnit, Spring Modulith, `-Xlint:all` |
 
@@ -33,11 +33,16 @@ notes/
 ├── domain/        Note, NoteId (records), SaveNoteResult (sealed: Saved | EmptyText | TextTooLong)
 ├── application/   NoteService (sealed results) + NoteRepository port (domain types in/out)
 ├── persistence/   JdbcNoteRepository — JdbcClient + SQL; rows become records in ONE row mapper
-└── web/           NoteController — exhaustive switch → one JTE template per outcome
-                   NotesEventStream — renders the list template, pushes it to all tabs over SSE
+└── web/           NoteController — exhaustive switch → element/signal patches per outcome
+                   NotesEventStream — renders the list template, patches it into all tabs
+                   SaveNoteSignals — the typed record the Datastar signals parse into
 ```
 
 Templates live in `src/main/jte/` with declared `@param` types — the compiler checks them against your records. The slice is disposable: copy its structure for your first real feature, then delete it (steps in [CLAUDE.md](CLAUDE.md)).
+
+## Datastar in one paragraph
+
+The page binds the input to a `$text` signal (`data-bind:text`) and submits via `data-on:submit="@post('/notes')"` — Datastar sends the signals as JSON and expects an SSE stream back. The server answers with **signal patches** for ephemeral view state (clear the input, set `$error` — rendered by `data-show`/`data-text`, so there is *no form template at all*) and broadcasts **element patches** for domain data (the JTE-rendered list, morphed by id into every tab connected via `data-init="@get('/notes/events')"`). One mechanism for request/response *and* realtime; the [Gadnex jte-datastar starter](https://github.com/Gadnex/jte-datastar-spring-boot-starter) renders JTE templates straight into patch events (`datastar.patchElements(emitters).template("notes/list").attribute("notes", notes).emit()`). It is a small, young project — if it ever goes unmaintained, its ~10 classes are trivially inlined.
 
 ## Outgrowing SQLite
 
@@ -82,4 +87,4 @@ java -XX:AOTCache=demo.aot -jar demo-0.0.1-SNAPSHOT.jar
 
 ---
 
-Originally generated with [ttcli](https://github.com/wimdeblauwe/ttcli), then hardened for DOP and collapsed to this stack. The v1 stack (Thymeleaf, Vite/bun, WebSocket, daisyUI, in-memory store) lives on `main`'s history and the `with-jdbc` branch. DOP references: [jitterted/tdd-game](https://github.com/jitterted/tdd-game), [Suigi/event-sourced-tic-tac-toe](https://github.com/Suigi/event-sourced-tic-tac-toe) (also JTE + htmx), [zodac/diurnal](https://github.com/zodac/diurnal).
+Earlier stacks live in git history: v1 (Thymeleaf, htmx, Vite/bun, WebSocket, daisyUI) and the `with-jdbc` MySQL branch. DOP references: [jitterted/tdd-game](https://github.com/jitterted/tdd-game), [Suigi/event-sourced-tic-tac-toe](https://github.com/Suigi/event-sourced-tic-tac-toe), [zodac/diurnal](https://github.com/zodac/diurnal).

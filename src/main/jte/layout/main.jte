@@ -15,8 +15,7 @@
 <main>
     ${content}
 </main>
-<script src="/webjars/htmx.org/dist/htmx.min.js"></script>
-<script src="/webjars/htmx-ext-sse/dist/sse.min.js"></script>
+<script type="module" src="/js/datastar.js"></script>
 ${scriptContent}
 </body>
 </html>

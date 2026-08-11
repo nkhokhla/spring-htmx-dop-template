@@ -1,33 +1,30 @@
 package com.example.demo.notes.web;
 
 import com.example.demo.notes.domain.Note;
-import gg.jte.TemplateEngine;
-import gg.jte.output.StringOutput;
-import java.io.IOException;
+import io.github.gadnex.jtedatastar.Datastar;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 /**
- * Pushes the rendered notes list to every connected browser over SSE (plain HTTP,
- * one-directional — no WebSocket handshake or origin config needed). The htmx
- * sse extension swaps each named event's payload into the subscribed element.
+ * Long-lived Datastar connections (one per open tab). Broadcasting renders the
+ * list template once and emits it as a patch-elements event to every connection;
+ * Datastar morphs the element with the matching id in each browser.
  */
 @Component
 class NotesEventStream {
 
     private final Set<SseEmitter> emitters = ConcurrentHashMap.newKeySet();
-    private final TemplateEngine templateEngine;
+    private final Datastar datastar;
 
-    NotesEventStream(TemplateEngine templateEngine) {
-        this.templateEngine = templateEngine;
+    NotesEventStream(Datastar datastar) {
+        this.datastar = datastar;
     }
 
     SseEmitter subscribe() {
-        var emitter = new SseEmitter(0L);
+        var emitter = new SseEmitter(-1L);
         emitter.onCompletion(() -> emitters.remove(emitter));
         emitter.onTimeout(() -> emitters.remove(emitter));
         emitter.onError(e -> emitters.remove(emitter));
@@ -36,15 +33,9 @@ class NotesEventStream {
     }
 
     void broadcastNotes(List<Note> notes) {
-        var output = new StringOutput();
-        templateEngine.render("notes/list.jte", Map.of("notes", notes), output);
-        var html = output.toString();
-        for (var emitter : emitters) {
-            try {
-                emitter.send(SseEmitter.event().name("notes").data(html));
-            } catch (IOException | IllegalStateException e) {
-                emitters.remove(emitter);
-            }
-        }
+        datastar.patchElements(emitters)
+                .template("notes/list")
+                .attribute("notes", notes)
+                .emit();
     }
 }

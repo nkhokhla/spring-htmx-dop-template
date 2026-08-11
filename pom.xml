@@ -39,8 +39,14 @@
         </dependency>
         <dependency>
             <groupId>gg.jte</groupId>
-            <artifactId>jte-spring-boot-starter-3</artifactId>
+            <artifactId>jte-spring-boot-starter-4</artifactId>
             <version>${jte.version}</version>
+        </dependency>
+        <!-- Renders JTE templates as Datastar SSE patch events (element + signal patches) -->
+        <dependency>
+            <groupId>io.github.gadnex</groupId>
+            <artifactId>jte-datastar-spring-boot-starter</artifactId>
+            <version>0.3.4</version>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -63,25 +69,10 @@
             <artifactId>jspecify</artifactId>
             <version>1.0.0</version>
         </dependency>
-        <dependency>
-            <groupId>io.github.wimdeblauwe</groupId>
-            <artifactId>htmx-spring-boot</artifactId>
-            <version>5.0.0</version>
-        </dependency>
         <!-- Web dependencies -->
         <dependency>
             <groupId>org.webjars</groupId>
             <artifactId>webjars-locator-lite</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.webjars.npm</groupId>
-            <artifactId>htmx.org</artifactId>
-            <version>2.0.10</version>
-        </dependency>
-        <dependency>
-            <groupId>org.webjars.npm</groupId>
-            <artifactId>htmx-ext-sse</artifactId>
-            <version>2.2.4</version>
         </dependency>
         <!-- shadcn-style components as plain CSS (no React, no node) -->
         <dependency>
