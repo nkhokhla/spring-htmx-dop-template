@@ -41,18 +41,7 @@ Two properties are the product and are never traded away:
 ## Outcomes are data, faults are exceptions
 
 - Services return sealed results (`SaveNoteResult` = `Saved` | `EmptyText` | `TextTooLong`) for outcomes the domain expects — validation failure, duplicate, not-found. Exceptions are only for bugs and faults.
-- Consume outcomes with exhaustive `switch` + record deconstruction, in production and test code alike; use unnamed patterns (`case Saved _`) when bindings are unused:
-
-  ```java
-  switch (noteService.save(signals.textOrEmpty())) {
-      case Saved _ -> {
-          notesEventStream.broadcastNotes(noteService.all());                     // element patch to all tabs
-          datastar.patchSignals(emitter).signal("text", "").signal("error", "").emit(); // clear caller's form
-      }
-      case EmptyText() -> patchError(emitter, "Note text must not be empty.");
-      case TextTooLong(int max, int actual) -> patchError(emitter, "Limit is %d, got %d.".formatted(max, actual));
-  }
-  ```
+- Consume outcomes with an exhaustive `switch` + record deconstruction, in production and test code alike; use unnamed patterns (`case Saved _`) when bindings are unused. The canonical example is `NoteController.save(...)` in the reference slice.
 
 - In tests, assert on outcome values — `assertThat(result).isEqualTo(new TextTooLong(280, 285))` — record equality is free.
 - Faults are handled at the adapter with Spring Framework 7 resilience annotations (`@EnableResilientMethods`, then `@Retryable`/`@ConcurrencyLimit` on the outbound method). A fault is not a sealed variant; an outcome is not retried.
@@ -60,18 +49,10 @@ Two properties are the product and are never traded away:
 
 ## Anatomy of a slice
 
-```
-com.example.demo.<feature>/
-├── domain/        records + sealed types only; no Spring/Servlet/JDBC imports; all fields final
-├── application/   services operating on domain data + the persistence ports
-├── persistence/   JdbcClient adapters implementing the ports
-└── web/           controllers, SSE streams; maps outcomes to patches
-```
+The reference slice is the map — mirror `notes/` rather than reading a description of it here. The structural rules live where they are enforced: ArchitectureTest (framework-free immutable domain, no widened inner-layer signatures, constructor injection) and ModularityTest (nested packages are module-private; another module may only use types from a slice's base package). The conventions the tests cannot see:
 
-- Nested packages are module-private: another module may only use types in the slice's base package (ModularityTest fails leaks the compiler allows). Cross-module communication is record events via `ApplicationEventPublisher` — the event record lives in the publisher's base package. Need async/transactional delivery with an outbox? Add runtime `spring-modulith-starter-core` + `@ApplicationModuleListener` then, not before.
-- Package-private by default; a type becomes `public` only when another package genuinely needs it (controllers, configs, adapters stay package-private — see `NoteController`).
-- Constructor injection only.
-- `ModularityTest.writeArchitectureDocumentation()` regenerates C4/PlantUML diagrams into `target/spring-modulith-docs` on every build.
+- Cross-module communication is record events via `ApplicationEventPublisher` — the event record lives in the publisher's base package. Need async/transactional delivery with an outbox? Add runtime `spring-modulith-starter-core` + `@ApplicationModuleListener` then, not before.
+- Package-private by default; a type becomes `public` only when another package genuinely needs it (controllers, configs, adapters stay package-private).
 
 **A new slice touches all of:** table in `schema.sql` · domain records + sealed outcome · port + service in `application` · adapter with its one row mapper in `persistence` · controller + signals record (+ event stream if realtime) in `web` · JTE template(s) · a `package-info.java` with `@NullMarked` in **every** new package (nullness is part of the type system; NullAway violations fail the compile) · tests — service against an in-memory fake, adapter as a `@JdbcTest` slice. Run ArchitectureTest/ModularityTest after adding packages.
 
@@ -89,7 +70,7 @@ com.example.demo.<feature>/
 The database is a boundary — rows are raw, exactly like HTTP input:
 
 - The port (`NoteRepository`) speaks domain types in and out; services depend on the port and unit-test against a five-line in-memory fake (`NoteServiceTest`).
-- The adapter uses `JdbcClient` + explicit SQL. A row becomes a record in exactly one place — the row mapper — and storage conventions live there and nowhere else: ids as UUID text, timestamps as ISO-8601 UTC text (sorts chronologically as plain text).
+- The adapter uses `JdbcClient` + explicit SQL. A row becomes a record in exactly one place — the row mapper — and the storage conventions are documented there and nowhere else (read `JdbcNoteRepository` before persisting a new type).
 - Ordering and filtering happen in SQL, not Java streams. Schema lives in `schema.sql`; switch to Flyway/Liquibase in a real project.
 - Tests run against real SQLite (shared in-memory mode). `src/test/resources/application.properties` shadows the main file — repeat any keys tests need. Adapter changes get a `@JdbcTest` + `Replace.NONE` + `@Import(<adapter>.class)` slice test.
 - SQLite is a legitimate production database and needs zero infrastructure. Outgrowing it is a two-line swap plus dialect touches — see README "Outgrowing SQLite"; the `with-jdbc` branch is a verified MySQL reference.
@@ -101,7 +82,7 @@ The database is a boundary — rows are raw, exactly like HTTP input:
   - *Domain data* (collections, records) is server-rendered JTE pushed as **element patches**: `datastar.patchElements(emitters).template("notes/list").attribute("notes", notes).emit()` (Gadnex starter). Datastar morphs the element with the matching `id` in every connected tab. One template serves initial render and patches — never a second variant.
   - *Ephemeral view state* (input contents, error text, loading flags) lives in **signals** patched back to the caller: `datastar.patchSignals(emitter).signal("error", …)`, rendered declaratively with `data-show`/`data-text` — no template needed for it.
 - Signals arriving at the server are a boundary: `@post` sends them as JSON; bind them to a small record (`SaveNoteSignals`) — the parse-once point — and annotate the controller with `@RegisterReflectionForBinding(<SignalsRecord>.class)` for native.
-- POST handlers return an `SseEmitter`: emit patches per outcome, then `complete()`. Long-lived streams (`data-init="@get('…/events')"`) use `new SseEmitter(-1L)`, tracked in a `Set` with removal on completion/timeout/error (see `NotesEventStream`).
+- POST handlers return an `SseEmitter`: emit patches per outcome, then `complete()`. The long-lived stream plumbing (`data-init="@get('…/events')"`) lives in `NotesEventStream` — extend it rather than re-inventing it.
 - The Datastar client is one vendored, version-pinned script (`static/js/datastar.js`). Attribute syntax is v1: `data-bind:text`, `data-on:submit="@post('/notes')"` (submit's default is auto-prevented), `data-signals`, `data-init`.
 - Styling: Basecoat component classes (`btn`, `btn-primary`, `input`, `card`, …) + Tailwind layout utilities (standalone binary scans `src/main/jte` via `@source`).
 
