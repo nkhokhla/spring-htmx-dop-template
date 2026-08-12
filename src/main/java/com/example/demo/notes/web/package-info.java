@@ -1,6 +1,6 @@
 /**
  * Web adapter for the notes feature: maps sealed domain outcomes to htmx fragments
- * and broadcasts shared state changes over WebSocket.
+ * and broadcasts shared state changes over SSE.
  */
 @NullMarked
 package com.example.demo.notes.web;

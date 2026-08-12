@@ -1,8 +1,6 @@
-# spring-htmx-dop-template — `htmx` branch
+# spring-htmx-dop-template
 
-> This branch is the **htmx variant** of the template. `main` uses [Datastar](https://data-star.dev) instead; everything else (JTE, SQLite, Tailwind standalone, Basecoat, all guardrails) is identical — the two differ only in the web transport layer (~11 files). See "[Datastar or htmx?](https://github.com/nkhokhla/spring-htmx-dop-template#datastar-or-htmx)" on `main` for how to choose. Pick this branch when you want maximum Spring-MVC idiom (controllers return view names), the boring maturity of htmx, and little or no realtime beyond what the SSE extension covers.
-
-A Spring Boot + htmx template that practices **Data Oriented Programming** — enforced with compiler-level guardrails — on a deliberately collapsed stack: typed templates, zero-infrastructure persistence, realtime over plain HTTP, and **no Node toolchain**. Inspired by the integrated spirit of Convex/Lakebed and the consolidation spirit of Vite+, kept 100% Spring.
+A Spring Boot + [htmx](https://htmx.org) template that practices **Data Oriented Programming** — enforced with compiler-level guardrails — on a deliberately collapsed stack: typed templates, zero-infrastructure persistence, realtime over plain HTTP, and **no Node toolchain**. Inspired by the integrated spirit of Convex/Lakebed and the consolidation spirit of Vite+, kept 100% Spring.
 
 | | |
 |---|---|
@@ -40,6 +38,23 @@ notes/
 ```
 
 Templates live in `src/main/jte/` with declared `@param` types — the compiler checks them against your records. The slice is disposable: copy its structure for your first real feature, then delete it (steps in [CLAUDE.md](CLAUDE.md)).
+
+## htmx or Datastar?
+
+The [`datastar` branch](https://github.com/nkhokhla/spring-htmx-dop-template/tree/datastar) holds this exact template with [Datastar](https://data-star.dev) instead of htmx. Everything else is identical — JTE, SQLite, Tailwind, Basecoat, every guardrail — the two differ only in the web transport layer (~11 files). Both are verified end to end, including native images. An honest comparison from building both:
+
+**Pick htmx (this branch) when:**
+- The app is mostly **request/response CRUD** with little or no realtime — here the htmx version is genuinely the simpler of the two.
+- You want **maximum Spring-MVC idiom**: controllers return view names; no `SseEmitter` in a plain POST, no imperative `emit()`/`complete()`.
+- "The DOM is the state" appeals — htmx has no client-side signal store to reason about.
+- You value boring maturity: htmx is everywhere, stable, and exhaustively documented.
+
+**Pick Datastar (`datastar` branch) when:**
+- **Realtime is core to the app.** This is the deciding factor. Datastar's one wire protocol serves request/response *and* broadcast — every future feature gets multi-tab live updates with zero extra machinery. In htmx, realtime is a bolted-on extension you re-wire per feature.
+- You like ephemeral view state as **signals** (input contents, error text patched by the server) — it deleted the form template entirely, and templates carry no transport attributes (pure markup + an `id`).
+- You accept a younger ecosystem (Datastar v1 is from 2025; the JTE integration is a small single-maintainer starter, trivially inlineable).
+
+What's *not* a differentiator: DOP fit (the sealed-result exhaustive switch survived the migration untouched), native image support, performance at this scale, or code size (the diff was +111/−99 lines — a wash; the elegance difference is structural, not quantitative).
 
 ## Outgrowing SQLite
 
@@ -84,4 +99,4 @@ java -XX:AOTCache=demo.aot -jar demo-0.0.1-SNAPSHOT.jar
 
 ---
 
-Originally generated with [ttcli](https://github.com/wimdeblauwe/ttcli), then hardened for DOP and collapsed to this stack. The v1 stack (Thymeleaf, Vite/bun, WebSocket, daisyUI, in-memory store) lives on `main`'s history and the `with-jdbc` branch. DOP references: [jitterted/tdd-game](https://github.com/jitterted/tdd-game), [Suigi/event-sourced-tic-tac-toe](https://github.com/Suigi/event-sourced-tic-tac-toe) (also JTE + htmx), [zodac/diurnal](https://github.com/zodac/diurnal).
+Originally generated with [ttcli](https://github.com/wimdeblauwe/ttcli), then hardened for DOP and collapsed to this stack. Variants: the [`datastar` branch](https://github.com/nkhokhla/spring-htmx-dop-template/tree/datastar) (same template, Datastar transport) and the [`with-jdbc` branch](https://github.com/nkhokhla/spring-htmx-dop-template/tree/with-jdbc) (MySQL reference, v1-era stack); the original v1 stack (Thymeleaf, Vite/bun, WebSocket, daisyUI, in-memory store) lives in this branch's history. DOP references: [jitterted/tdd-game](https://github.com/jitterted/tdd-game), [Suigi/event-sourced-tic-tac-toe](https://github.com/Suigi/event-sourced-tic-tac-toe) (also JTE + htmx), [zodac/diurnal](https://github.com/zodac/diurnal).
