@@ -1,6 +1,15 @@
 # CLAUDE.md
 
-Spring Boot 4 + JTE + Datastar template. Java 25, virtual threads, SQLite persistence, SSE realtime, Tailwind CSS 4 standalone binary + shadcn-style Basecoat components (webjar) — no Node toolchain. This template practices **Data Oriented Programming (DOP)** — read the conventions below before writing any Java code.
+This file is the contract between us (the humans directing the work) and you (the agent writing the code). It ships with the template: every project cloned from here inherits it, and the code you write becomes the example the next agent pattern-matches on — so write like the reference slice, because your output is tomorrow's reference.
+
+**The thing:** a Spring Boot 4 template — Java 25, virtual threads, JTE templates compiled to Java classes, Datastar over SSE for request/response *and* realtime, SQLite, Tailwind CSS 4 standalone binary + Basecoat component classes (webjar). The codebase practices **Data Oriented Programming** ([DOP in Java](https://nejckorasa.github.io/posts/data-oriented-programming-in-java/), [Inside Java's DOP v1.1](https://inside.java/2024/05/23/dop-v1-1-introduction/)) stated in terms the build enforces.
+
+Two properties are the product and are never traded away:
+
+1. **Zero toolchain, zero infrastructure.** No Node, no npm, no Docker, no database server, no Groovy, no runtime template reflection — the native image builds with zero hand-written hints. Clone, `./mvnw verify`, run. A change that adds a toolchain, a server process, or a reflection hint is breaking the product: say so loudly and get approval before making it.
+2. **The build is the reviewer.** The conventions below are guardrails, not prose. When a guardrail blocks you, the code is wrong — fix the code. Reaching green by suppressing a warning, loosening a rule, adding a `default ->` to a sealed switch, or widening a type is never the fix.
+
+**Done means:** `./mvnw verify` is green and the change could be mistaken for the reference slice. For a new feature, walk the checklist in "Anatomy of a slice" and say which entries apply.
 
 ## Commands
 
@@ -9,44 +18,30 @@ Spring Boot 4 + JTE + Datastar template. Java 25, virtual threads, SQLite persis
 - `./mvnw spring-boot:run -Dspring-boot.run.profiles=local` — dev mode: JTE hot-reloads templates from `src/main/jte`
 - `tools/tailwind.sh -i src/main/css/application.css -o target/classes/static/css/application.css --watch` — CSS watch during styling work
 - `./mvnw test -Dtest=ArchitectureTest` / `-Dtest=ModularityTest` — architecture / module rules only
+- `./mvnw -Pnative native:compile` — GraalVM native image (needs GraalVM JDK 25, gcc, zlib1g-dev)
 
-## Data Oriented Programming conventions
+## The words we work with
 
-This codebase follows the four DOP principles (see [Data Oriented Programming in Java](https://nejckorasa.github.io/posts/data-oriented-programming-in-java/) and [Inside Java's DOP v1.1](https://inside.java/2024/05/23/dop-v1-1-introduction/)). The `notes` feature is the reference implementation — copy its structure for every new feature.
+- **evidence** — a value whose type proves its invariants (`Note` cannot be blank, `NoteId` cannot be an arbitrary string). Evidence is created in exactly one place, and holding it is proof.
+- **boundary** — where raw data enters: HTTP parameters, Datastar signals JSON, database rows, config, external APIs. Raw values are legitimate only at a boundary.
+- **widen** — turn evidence back into raw: `Object`/`Map` around known data, a bare `UUID`/`String` where an id record exists, a sealed result collapsed to a boolean, status code, or null.
+- **outcome** — a result the domain expects (`Saved`, `EmptyText`, `TextTooLong`), modeled as a sealed type. **fault** — an infrastructure failure (network, downstream outage); faults stay exceptions.
+- **slice** — one feature package with `domain/ application/ persistence/ web/`; a Spring Modulith module whose insides are private.
+- **the reference slice** — `notes`: the worked example every rule below points into. Copy its structure for every feature. It is disposable — see the last section.
+- **guardrail** — a build check that turns a convention into a compile/test failure: Error Prone + NullAway (config in `pom.xml` + `.mvn/jvm.config`), the JTE compiler, ArchitectureTest, ModularityTest, `-Xlint:all` kept warning-clean.
 
-### 1. Model data immutably and transparently
+## Evidence over trust (parse, don't validate)
 
-- Domain data is `record`s, never classes with getters/setters. No Lombok — records replace it.
-- Wrap identifiers in dedicated records (`NoteId`), not bare `UUID`/`long`.
-- Collections held by records are copied defensively or immutable (`List.copyOf`).
+- Raw crosses a boundary exactly once, as the input of a single parse that returns evidence or an outcome (`NoteService.save(String)` → `SaveNoteResult`). Before typing a parameter `String`/`Map`/`JsonNode`, name the boundary that made it raw; no answer means use the domain type.
+- Possession is proof: code holding a `Note` never re-checks its invariants — re-validation downstream destroys the meaning of the type.
+- Widening destroys evidence, and someone downstream always pays to fabricate it back — a cast or a re-validation. Carry the domain type through every layer; switch a sealed result where it is consumed. ArchitectureTest (`no_widened_signatures_in_inner_layers`) rejects widened signatures outside `web/`.
+- Pattern matching replaces `instanceof`-then-cast (Error Prone `PatternMatchingInstanceof` fails the compile). An unchecked cast is only for an invariant the compiler cannot express — smallest possible scope, comment stating the invariant, and a review blocker in `domain`/`application`.
+- Use the strongest type the owner exports: `Locale`/`Instant` over their string forms, library types over local approximations.
 
-### 2. Model the data, the whole data, and nothing but the data
+## Outcomes are data, faults are exceptions
 
-- Records carry no behavior beyond invariant checks and derived accessors. Business logic lives in services (`notes/application`), never inside the data.
-- Form/request payloads are records. `@ConfigurationProperties` are records.
-
-### 3. Make illegal states unrepresentable
-
-- Enforce invariants in compact constructors (`Note` rejects blank/overlong text) so an invalid instance cannot exist.
-- Nullness is part of the type system: every package is `@NullMarked` (JSpecify) and NullAway fails the build on violations. **Every new package needs a `package-info.java` with `@NullMarked`.** Where absence is genuinely part of the model, mark it explicitly with `@Nullable` — but prefer restructuring the data (e.g. a sealed hierarchy) over nullable members.
-- Prefer distinct sealed variants over boolean flags or enum + nullable-fields combinations.
-
-### Evolving records, and classes that can't quite be records
-
-Conventions aligned with where Java's DOP support is heading ([carrier classes](https://mail.openjdk.org/pipermail/amber-spec-experts/2026-January/004307.html), `with` reconstruction — JEP 468). Following them costs nothing today and makes that future adoption mechanical:
-
-- **Evolve a record by appending components at the end only** — never reorder or insert. Keep an explicit constructor with the old shape delegating to the canonical one with defaults. Reordering breaks every deconstruction pattern positionally and silently when component types coincide.
-- **All invariants live in the compact (canonical) constructor; every other constructor or factory delegates to it.** One choke point means no invalid instance can exist through any path — and it is what will make `with`-style reconstruction safe when it arrives.
-- **Do not hand-write `withX(...)` copy methods on records** unless a call site genuinely needs one; when you do, implement them via the canonical constructor, never by field-copying around it.
-- **When a class can't be a record** (mutable, cached, or derived state; representation differs from API), still shape it like one: record-style accessors (`x()`, not `getX()`), one canonical constructor matching the full state description, `equals`/`hashCode`/`toString` over exactly that state. Such a class remains honest data today and becomes a carrier class by deleting boilerplate when they ship.
-- For public API boundaries, prefer a **sealed interface with a private record implementation** (`public sealed interface Pair<T,U> permits PairImpl`) — consumers get pattern matching without coupling to the representation.
-
-### 4. Separate operations from data
-
-- Services return **sealed result types** (`SaveNoteResult` = `Saved` | `EmptyText` | `TextTooLong`) instead of throwing exceptions for expected outcomes. Exceptions are only for bugs and infrastructure failures.
-- **Expected outcomes vs. infrastructure faults**: sealed results model outcomes the domain *expects* (validation failure, duplicate, not-found). Transient infrastructure faults (network, downstream outage) stay exceptions — handle them at the adapter with Spring Framework 7's core resilience annotations (`@EnableResilientMethods`, then `@Retryable`/`@ConcurrencyLimit` on the outbound method). Don't model retryable faults as sealed variants, and don't retry domain outcomes.
-- **Outbound HTTP uses HTTP interface clients** (`@GetExchange` interfaces registered via `@ImportHttpServices`), returning records — never a raw `RestClient` call materializing `Map`s. This keeps the type-discipline rule intact at the outbound boundary: JSON binds to records at the edge.
-- Callers handle results with **exhaustive `switch` expressions using record deconstruction**:
+- Services return sealed results (`SaveNoteResult` = `Saved` | `EmptyText` | `TextTooLong`) for outcomes the domain expects — validation failure, duplicate, not-found. Exceptions are only for bugs and faults.
+- Consume outcomes with exhaustive `switch` + record deconstruction, in production and test code alike; use unnamed patterns (`case Saved _`) when bindings are unused:
 
   ```java
   switch (noteService.save(signals.textOrEmpty())) {
@@ -59,85 +54,66 @@ Conventions aligned with where Java's DOP support is heading ([carrier classes](
   }
   ```
 
-- **Never write a `default ->` branch in a switch over a sealed type or enum.** A default silently disables the compiler's exhaustiveness check — the whole point is that adding a new variant breaks compilation at every call site until it is handled. This applies to test code too.
-- Use unnamed patterns (`case Saved _`) when bindings are unused.
+- In tests, assert on outcome values — `assertThat(result).isEqualTo(new TextTooLong(280, 285))` — record equality is free.
+- Faults are handled at the adapter with Spring Framework 7 resilience annotations (`@EnableResilientMethods`, then `@Retryable`/`@ConcurrencyLimit` on the outbound method). A fault is not a sealed variant; an outcome is not retried.
+- Outbound HTTP uses HTTP interface clients (`@GetExchange` interfaces registered via `@ImportHttpServices`) returning records — JSON binds to evidence at the edge, same as inbound.
 
-## Type discipline: parse, don't validate
-
-Records and sealed types are evidence. Preserve evidence already established, create it by parsing raw input once at the boundary, and never fabricate it with a cast after throwing it away.
-
-- **Raw input is only raw at a genuine trust boundary** — HTTP parameters, JSON, config, external systems, all living in `web/` or config classes. A raw value crosses inward only as the input of a single parsing operation that returns a domain type or a sealed failure (`NoteService.save(String)` → `SaveNoteResult`). Before typing a parameter as `String`/`Map`/`JsonNode`, answer: *which external boundary made this value raw?* No answer means use the domain type.
-- **Possessing a domain value is proof.** `Note`'s compact constructor guarantees its invariants, so code holding a `Note` never re-checks them — re-validation downstream is not defensive, it destroys the meaning of the type.
-- **Never widen a known value**: no `Object` or `Map<String, Object>` around known data, no stringly-typed signatures (`NoteId`, never a bare `UUID` or `String` id, in every layer), and never collapse a sealed result into a boolean, status code, or nullable — pass it along, or switch it exhaustively where it is consumed. *Enforced for `domain`/`application` method signatures by ArchitectureTest (`no_widened_signatures_in_inner_layers`).*
-- **Never erase a type and cast it back.** `instanceof`-then-cast is replaced by pattern matching (*enforced: Error Prone `PatternMatchingInstanceof` fails the compile*). An unchecked cast is allowed only for an invariant the compiler cannot express, at the smallest possible scope, with a comment stating that invariant; in `domain`/`application` code it is a review blocker.
-- **Use the strongest type the owner exports**: `HtmxRequest` over reading headers, `Locale`/`Instant` over their string forms, library types over local approximations.
-
-Review triggers: `Object` parameters or returns outside a real boundary; sealed outcomes encoded as booleans/ints/nulls; casts following a widening our own code introduced; re-validation of constructor-guaranteed invariants.
-
-## Architecture (enforced by ArchitectureTest)
+## Anatomy of a slice
 
 ```
 com.example.demo.<feature>/
-├── domain/        records + sealed types only; NO Spring/framework imports
-├── application/   services operating on domain data + persistence ports
+├── domain/        records + sealed types only; no Spring/Servlet/JDBC imports; all fields final
+├── application/   services operating on domain data + the persistence ports
 ├── persistence/   JdbcClient adapters implementing the ports
-└── web/           controllers, SSE streams; maps outcomes to views
+└── web/           controllers, SSE streams; maps outcomes to patches
 ```
 
-- `..domain..` must not depend on Spring, Servlet APIs, JDBC, or the `application`/`persistence`/`web` layers.
-- All fields in `..domain..` must be final.
-- No field injection anywhere — constructor injection only.
+- Nested packages are module-private: another module may only use types in the slice's base package (ModularityTest fails leaks the compiler allows). Cross-module communication is record events via `ApplicationEventPublisher` — the event record lives in the publisher's base package. Need async/transactional delivery with an outbox? Add runtime `spring-modulith-starter-core` + `@ApplicationModuleListener` then, not before.
+- Package-private by default; a type becomes `public` only when another package genuinely needs it (controllers, configs, adapters stay package-private — see `NoteController`).
+- Constructor injection only.
+- `ModularityTest.writeArchitectureDocumentation()` regenerates C4/PlantUML diagrams into `target/spring-modulith-docs` on every build.
 
-Run `./mvnw test -Dtest=ArchitectureTest` after adding packages; violations fail the build.
+**A new slice touches all of:** table in `schema.sql` · domain records + sealed outcome · port + service in `application` · adapter with its one row mapper in `persistence` · controller + signals record (+ event stream if realtime) in `web` · JTE template(s) · a `package-info.java` with `@NullMarked` in **every** new package (nullness is part of the type system; NullAway violations fail the compile) · tests — service against an in-memory fake, adapter as a `@JdbcTest` slice. Run ArchitectureTest/ModularityTest after adding packages.
 
-## Modules (enforced by ModularityTest)
+## Records in practice
 
-Each top-level feature package (`notes`, …) is a **Spring Modulith module** (test-scoped dependency only — no runtime weight):
-
-- Nested packages (`domain`, `application`, `web`, …) are module-private. Another module may only use types placed in the module's base package. `ModularityTest.modulesRespectTheirBoundaries()` fails the build on leaks the compiler allows.
-- **Cross-module communication happens via record events**, published with `ApplicationEventPublisher` — never by injecting another module's service. The event record goes in the publisher's base package (its public API). If async/transactional delivery with an outbox is needed, add the runtime `spring-modulith-starter-core` + `@ApplicationModuleListener` then.
-- **Package-private by default.** A type becomes `public` only when another package genuinely needs it. Controllers, configs, and adapters are package-private (see `NoteController`, `WebSocketConfig`).
-- `ModularityTest.writeArchitectureDocumentation()` regenerates C4/PlantUML module diagrams into `target/spring-modulith-docs` on every build — always-current architecture docs.
+- Domain data is records — no Lombok, no getter/setter classes. Identifiers get wrapper records (`NoteId`), never bare `UUID`/`long`. Form/request payloads and `@ConfigurationProperties` are records too.
+- Records carry no behavior beyond invariant checks and derived accessors; logic lives in services.
+- All invariants live in the compact (canonical) constructor; every other constructor or factory delegates to it — one choke point, so no invalid instance exists through any path. Collections held by records are immutable (`List.copyOf`).
+- Absence: prefer a sealed hierarchy over a nullable member; where absence is genuinely part of the model, mark it `@Nullable`. Prefer distinct sealed variants over boolean flags or enum + nullable-field combinations.
+- Evolve a record by appending components at the end only, keeping an old-shape constructor that delegates with defaults — reordering breaks deconstruction patterns positionally and silently. Hand-write `withX(...)` only when a call site needs it, implemented via the canonical constructor. (Aligned with where Java is heading: [carrier classes](https://mail.openjdk.org/pipermail/amber-spec-experts/2026-January/004307.html), JEP 468 `with` reconstruction.)
+- A class that can't be a record (mutable/cached state, representation ≠ API) is still shaped like one: `x()` accessors, one canonical constructor over the full state, `equals`/`hashCode`/`toString` over exactly that state. For public API boundaries, prefer a sealed interface with a private record implementation — pattern matching without coupling to the representation.
 
 ## Persistence (SQLite)
 
-The database is a trust boundary, handled exactly like HTTP input:
+The database is a boundary — rows are raw, exactly like HTTP input:
 
-- The `application` layer defines a small **port** (`NoteRepository`: domain types in, domain types out). Services depend on the port — unit-testable with a five-line in-memory fake (see `NoteServiceTest`).
-- The `persistence` adapter implements the port with `JdbcClient` and explicit SQL. **A row becomes a domain record in exactly one place** — the adapter's row mapper. Storage conventions live there and nowhere else: SQLite stores ids as UUID text and timestamps as ISO-8601 UTC text (which sorts chronologically as plain text).
-- SQLite is the default because it needs zero infrastructure and is a legitimate production database. **Outgrowing it is a two-line swap** (driver dependency + datasource URL) plus dialect touches in `schema.sql` and the adapter — see README "Outgrowing SQLite"; the `with-jdbc` branch holds a verified MySQL reference.
-- Tests run against real SQLite (shared in-memory mode, `src/test/resources/application.properties` — it shadows the main file, repeat any keys tests need). Adapter changes get a `@JdbcTest` + `Replace.NONE` + `@Import(<adapter>.class)` slice test.
-- Schema lives in `schema.sql`; switch to Flyway/Liquibase in a real project. Ordering and filtering belong in SQL, not Java streams.
+- The port (`NoteRepository`) speaks domain types in and out; services depend on the port and unit-test against a five-line in-memory fake (`NoteServiceTest`).
+- The adapter uses `JdbcClient` + explicit SQL. A row becomes a record in exactly one place — the row mapper — and storage conventions live there and nowhere else: ids as UUID text, timestamps as ISO-8601 UTC text (sorts chronologically as plain text).
+- Ordering and filtering happen in SQL, not Java streams. Schema lives in `schema.sql`; switch to Flyway/Liquibase in a real project.
+- Tests run against real SQLite (shared in-memory mode). `src/test/resources/application.properties` shadows the main file — repeat any keys tests need. Adapter changes get a `@JdbcTest` + `Replace.NONE` + `@Import(<adapter>.class)` slice test.
+- SQLite is a legitimate production database and needs zero infrastructure. Outgrowing it is a two-line swap plus dialect touches — see README "Outgrowing SQLite"; the `with-jdbc` branch is a verified MySQL reference.
 
-## JTE + Datastar conventions
+## Web (JTE + Datastar)
 
-- Templates live in `src/main/jte/` and are **compiled to Java classes at build time** (jte-maven-plugin): every template declares typed `@param`s and the compiler checks them against your records — a template referencing a renamed component fails the build. There is NO template reflection: no SpEL, no runtime hints, nothing to register for native (JTE's `NativeResourcesExtension` covers the generated classes).
-- **Two kinds of state, two kinds of patch — both server-authoritative:**
-  - *Domain data* (collections, records) is server-rendered JTE and pushed as **element patches**: `datastar.patchElements(emitters).template("notes/list").attribute("notes", notes).emit()` (Gadnex starter). Datastar morphs the element with the matching `id` in every connected tab. Same template for initial render and patches — never write a second variant.
-  - *Ephemeral view state* (input contents, error message, loading flags) lives in **signals** and is patched back to the caller: `datastar.patchSignals(emitter).signal("error", …)`. Rendered declaratively (`data-show`, `data-text`) — no template needed for it.
-- **Signals arriving at the server are a raw trust boundary**: `@post` sends them as JSON; bind them to a small record (`SaveNoteSignals`) — the typed parse-once point — and annotate the controller with `@RegisterReflectionForBinding(<SignalsRecord>.class)` for native. Never read signals into a `Map`.
-- POST handlers return an `SseEmitter`: emit patches per sealed outcome, then `complete()`. Long-lived streams (`data-init="@get('…/events')"`) use `new SseEmitter(-1L)` and are tracked in a `Set` with removal on completion/timeout/error (see `NotesEventStream`).
-- The Datastar client is a single vendored script (`static/js/datastar.js`, version-pinned). Attribute syntax is v1: `data-bind:text`, `data-on:submit="@post('/notes')"` (submit's default is auto-prevented), `data-signals`, `data-init`.
-- Styling: shadcn-style component classes come from the Basecoat webjar (`btn`, `btn-primary`, `input`, `card`, …); layout utilities from Tailwind (standalone binary, scans `src/main/jte` via `@source`). No Node, no npm — don't add them back.
+- Templates live in `src/main/jte/` and compile to Java classes at build time with typed `@param`s — renaming a record component breaks the referencing template at compile time. No SpEL, no runtime reflection, nothing to register for native (JTE's `NativeResourcesExtension` covers the generated classes).
+- Two kinds of state, two kinds of patch, both server-authoritative:
+  - *Domain data* (collections, records) is server-rendered JTE pushed as **element patches**: `datastar.patchElements(emitters).template("notes/list").attribute("notes", notes).emit()` (Gadnex starter). Datastar morphs the element with the matching `id` in every connected tab. One template serves initial render and patches — never a second variant.
+  - *Ephemeral view state* (input contents, error text, loading flags) lives in **signals** patched back to the caller: `datastar.patchSignals(emitter).signal("error", …)`, rendered declaratively with `data-show`/`data-text` — no template needed for it.
+- Signals arriving at the server are a boundary: `@post` sends them as JSON; bind them to a small record (`SaveNoteSignals`) — the parse-once point — and annotate the controller with `@RegisterReflectionForBinding(<SignalsRecord>.class)` for native.
+- POST handlers return an `SseEmitter`: emit patches per outcome, then `complete()`. Long-lived streams (`data-init="@get('…/events')"`) use `new SseEmitter(-1L)`, tracked in a `Set` with removal on completion/timeout/error (see `NotesEventStream`).
+- The Datastar client is one vendored, version-pinned script (`static/js/datastar.js`). Attribute syntax is v1: `data-bind:text`, `data-on:submit="@post('/notes')"` (submit's default is auto-prevented), `data-signals`, `data-init`.
+- Styling: Basecoat component classes (`btn`, `btn-primary`, `input`, `card`, …) + Tailwind layout utilities (standalone binary scans `src/main/jte` via `@source`).
 
-## The example slice is disposable
+## Native image
 
-The `notes` feature exists to demonstrate the conventions, not to ship. Keep it as the reference while the project has no real features yet; once the first real feature slice exists, delete the example and treat that feature as the reference instead:
+The stack needs no reflection hints — keep it that way. Reflection-free libraries first; if a dependency truly needs reflection in native, register hints in a module-owned `RuntimeHintsRegistrar`, never a root-level catch-all. Groovy-based dependencies break GraalVM native builds — a hard no.
+
+## The reference slice is disposable
+
+The `notes` feature exists to demonstrate the conventions, not to ship. Keep it as the reference while the project has no real features; once the first real slice exists, that becomes the reference and the example goes:
 
 1. Delete `src/main/java/com/example/demo/notes/`, `src/test/java/com/example/demo/notes/`, and `src/main/jte/notes/`.
 2. Remove the notes section from `index.jte` and give your first real feature's controller the `GET /` mapping (it lives in `NoteController` now); drop the `Clock` bean and the `note` table in `schema.sql` if nothing else uses them.
-3. Update the "reference implementation" pointer in this file to the real feature.
+3. Update the "reference slice" pointer in this file to the real feature.
 4. `./mvnw verify` must stay green after removal — nothing else may depend on the example (ModularityTest and ArchitectureTest will tell you if it does).
-
-## GraalVM native image
-
-`./mvnw -Pnative native:compile` produces a native binary (needs GraalVM JDK 25, gcc, zlib1g-dev). The v2 stack needs **no reflection hints**: JTE templates are precompiled classes (no SpEL, no template reflection), so there is no `NativeRuntimeHints` and nothing to register when adding templates. Keep it that way:
-
-1. **Never add Groovy-based dependencies** — Groovy breaks GraalVM native builds.
-2. **Prefer reflection-free libraries**; if a dependency does need reflection in native, register hints in a module-owned `RuntimeHintsRegistrar` rather than a root-level catch-all.
-
-## Build guardrails
-
-- **Error Prone + NullAway** run on every compile (config in `pom.xml`, JVM exports in `.mvn/jvm.config`). NullAway violations are compile errors.
-- `-Xlint:all` is enabled; keep the build warning-clean.
-- Tests assert on result **values** (`assertThat(result).isEqualTo(new TextTooLong(280, 285))`) — records give you equality for free. Switch exhaustively in tests instead of `default`-ing to a failure.
