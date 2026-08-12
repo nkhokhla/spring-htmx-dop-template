@@ -41,19 +41,7 @@ Two properties are the product and are never traded away:
 ## Outcomes are data, faults are exceptions
 
 - Services return sealed results (`SaveNoteResult` = `Saved` | `EmptyText` | `TextTooLong`) for outcomes the domain expects — validation failure, duplicate, not-found. Exceptions are only for bugs and faults.
-- Consume outcomes with exhaustive `switch` + record deconstruction, in production and test code alike; use unnamed patterns (`case Saved _`) when bindings are unused:
-
-  ```java
-  return switch (noteService.save(text)) {
-      case Saved _ -> {
-          notesEventStream.broadcastNotes(noteService.all());   // push the fresh list to all tabs
-          yield "notes/form";                                   // caller gets a clean form back
-      }
-      case EmptyText() -> formWithError(model, text, "Note text must not be empty.");
-      case TextTooLong(int max, int actual) ->
-              formWithError(model, text, "Limit is %d, got %d.".formatted(max, actual));
-  };
-  ```
+- Consume outcomes with an exhaustive `switch` + record deconstruction, in production and test code alike; use unnamed patterns (`case Saved _`) when bindings are unused. The canonical example is `NoteController.save(...)` in the reference slice.
 
 - In tests, assert on outcome values — `assertThat(result).isEqualTo(new TextTooLong(280, 285))` — record equality is free.
 - Faults are handled at the adapter with Spring Framework 7 resilience annotations (`@EnableResilientMethods`, then `@Retryable`/`@ConcurrencyLimit` on the outbound method). A fault is not a sealed variant; an outcome is not retried.
@@ -61,18 +49,10 @@ Two properties are the product and are never traded away:
 
 ## Anatomy of a slice
 
-```
-com.example.demo.<feature>/
-├── domain/        records + sealed types only; no Spring/Servlet/JDBC imports; all fields final
-├── application/   services operating on domain data + the persistence ports
-├── persistence/   JdbcClient adapters implementing the ports
-└── web/           controllers, SSE streams; maps outcomes to views
-```
+The reference slice is the map — mirror `notes/` rather than reading a description of it here. The structural rules live where they are enforced: ArchitectureTest (framework-free immutable domain, no widened inner-layer signatures, constructor injection) and ModularityTest (nested packages are module-private; another module may only use types from a slice's base package). The conventions the tests cannot see:
 
-- Nested packages are module-private: another module may only use types in the slice's base package (ModularityTest fails leaks the compiler allows). Cross-module communication is record events via `ApplicationEventPublisher` — the event record lives in the publisher's base package. Need async/transactional delivery with an outbox? Add runtime `spring-modulith-starter-core` + `@ApplicationModuleListener` then, not before.
-- Package-private by default; a type becomes `public` only when another package genuinely needs it (controllers, configs, adapters stay package-private — see `NoteController`).
-- Constructor injection only.
-- `ModularityTest.writeArchitectureDocumentation()` regenerates C4/PlantUML diagrams into `target/spring-modulith-docs` on every build.
+- Cross-module communication is record events via `ApplicationEventPublisher` — the event record lives in the publisher's base package. Need async/transactional delivery with an outbox? Add runtime `spring-modulith-starter-core` + `@ApplicationModuleListener` then, not before.
+- Package-private by default; a type becomes `public` only when another package genuinely needs it (controllers, configs, adapters stay package-private).
 
 **A new slice touches all of:** table in `schema.sql` · domain records + sealed outcome · port + service in `application` · adapter with its one row mapper in `persistence` · controller (+ event stream if realtime) in `web` · JTE template(s) · a `package-info.java` with `@NullMarked` in **every** new package (nullness is part of the type system; NullAway violations fail the compile) · tests — service against an in-memory fake, adapter as a `@JdbcTest` slice. Run ArchitectureTest/ModularityTest after adding packages.
 
@@ -90,7 +70,7 @@ com.example.demo.<feature>/
 The database is a boundary — rows are raw, exactly like HTTP input:
 
 - The port (`NoteRepository`) speaks domain types in and out; services depend on the port and unit-test against a five-line in-memory fake (`NoteServiceTest`).
-- The adapter uses `JdbcClient` + explicit SQL. A row becomes a record in exactly one place — the row mapper — and storage conventions live there and nowhere else: ids as UUID text, timestamps as ISO-8601 UTC text (sorts chronologically as plain text).
+- The adapter uses `JdbcClient` + explicit SQL. A row becomes a record in exactly one place — the row mapper — and the storage conventions are documented there and nowhere else (read `JdbcNoteRepository` before persisting a new type).
 - Ordering and filtering happen in SQL, not Java streams. Schema lives in `schema.sql`; switch to Flyway/Liquibase in a real project.
 - Tests run against real SQLite (shared in-memory mode). `src/test/resources/application.properties` shadows the main file — repeat any keys tests need. Adapter changes get a `@JdbcTest` + `Replace.NONE` + `@Import(<adapter>.class)` slice test.
 - SQLite is a legitimate production database and needs zero infrastructure. Outgrowing it is a two-line swap plus dialect touches — see README "Outgrowing SQLite"; the `with-jdbc` branch is a verified MySQL reference.
@@ -98,10 +78,9 @@ The database is a boundary — rows are raw, exactly like HTTP input:
 ## Web (JTE + htmx + SSE)
 
 - Templates live in `src/main/jte/` and compile to Java classes at build time with typed `@param`s — renaming a record component breaks the referencing template at compile time. No SpEL, no runtime reflection, nothing to register for native (JTE's `NativeResourcesExtension` covers the generated classes).
-- Each sealed outcome maps to its own htmx response: controllers return view names, and success and each failure render their own template (see `NoteController`). One template per fragment (`notes/form.jte`, `notes/list.jte`); layout via `layout/main.jte` taking `gg.jte.Content` parameters.
+- Each sealed outcome maps to its own htmx response: controllers return view names, and success and each failure render their own template. One template per fragment; layout templates take `gg.jte.Content` parameters.
 - Shared state changes are pushed to all browsers over **SSE**: `NotesEventStream` renders the list template with the injected `gg.jte.TemplateEngine` and sends it as a named event; the htmx sse extension (`hx-ext="sse"`, `sse-connect`, `sse-swap` + `hx-swap="outerHTML"`) replaces the subscribed element. One template serves initial render and broadcasts — never an out-of-band variant.
-- SSE is plain HTTP: no WebSocket config, no origin handling. Long-lived emitters use `new SseEmitter(0L)` (no timeout), tracked in a `Set` with removal on completion/timeout/error (see `NotesEventStream`).
-- htmx and its sse extension come from webjars, version-pinned in `pom.xml`.
+- SSE is plain HTTP: no WebSocket config, no origin handling. The emitter lifecycle plumbing lives in `NotesEventStream` — extend it rather than re-inventing it.
 - Styling: Basecoat component classes (`btn`, `btn-primary`, `input`, `card`, …) + Tailwind layout utilities (standalone binary scans `src/main/jte` via `@source`).
 
 ## Native image
