@@ -42,7 +42,6 @@ Two properties are the product and are never traded away:
 
 - Services return sealed results (`SaveNoteResult` = `Saved` | `EmptyText` | `TextTooLong`) for outcomes the domain expects — validation failure, duplicate, not-found. Exceptions are only for bugs and faults.
 - Consume outcomes with an exhaustive `switch` + record deconstruction, in production and test code alike; use unnamed patterns (`case Saved _`) when bindings are unused. The canonical example is `NoteController.save(...)` in the reference slice.
-
 - In tests, assert on outcome values — `assertThat(result).isEqualTo(new TextTooLong(280, 285))` — record equality is free.
 - Faults are handled at the adapter with Spring Framework 7 resilience annotations (`@EnableResilientMethods`, then `@Retryable`/`@ConcurrencyLimit` on the outbound method). A fault is not a sealed variant; an outcome is not retried.
 - Outbound HTTP uses HTTP interface clients (`@GetExchange` interfaces registered via `@ImportHttpServices`) returning records — JSON binds to evidence at the edge, same as inbound.
