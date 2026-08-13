@@ -28,7 +28,7 @@ Two properties are the product and are never traded away:
 - **outcome** — a result the domain expects (`Saved`, `EmptyText`, `TextTooLong`), modeled as a sealed type. **fault** — an infrastructure failure (network, downstream outage); faults stay exceptions.
 - **slice** — one feature package with `domain/ application/ persistence/ web/`; a Spring Modulith module whose insides are private.
 - **the reference slice** — `notes`: the worked example every rule below points into. Copy its structure for every feature. It is disposable — see the last section.
-- **guardrail** — a build check that turns a convention into a compile/test failure: Error Prone + NullAway (config in `pom.xml` + `.mvn/jvm.config`), the JTE compiler, ArchitectureTest, ModularityTest, `-Xlint:all` kept warning-clean.
+- **guardrail** — a build check that turns a convention into a compile/test failure: Error Prone + NullAway (config in `pom.xml` + `.mvn/jvm.config`), the JTE compiler, ArchitectureTest, ModularityTest, `-Xlint:all` + `-Werror`.
 
 ## Evidence over trust (parse, don't validate)
 
@@ -68,7 +68,7 @@ The reference slice is the map — mirror `notes/` rather than reading a descrip
 
 The database is a boundary — rows are raw, exactly like HTTP input:
 
-- The port (`NoteRepository`) speaks domain types in and out; services depend on the port and unit-test against a five-line in-memory fake (`NoteServiceTest`).
+- The port (`NoteRepository`) speaks domain types in and out; services depend on the port and unit-test against a five-line in-memory fake (`NoteServiceTest`). Mockito is deliberately excluded from the test classpath — fakes and real SQLite, by construction.
 - The adapter uses `JdbcClient` + explicit SQL. A row becomes a record in exactly one place — the row mapper — and the storage conventions are documented there and nowhere else (read `JdbcNoteRepository` before persisting a new type).
 - Ordering and filtering happen in SQL, not Java streams. Schema lives in `schema.sql`; switch to Flyway/Liquibase in a real project.
 - Tests run against real SQLite (shared in-memory mode). `src/test/resources/application.properties` shadows the main file — repeat any keys tests need. Adapter changes get a `@JdbcTest` + `Replace.NONE` + `@Import(<adapter>.class)` slice test.
