@@ -39,12 +39,13 @@ class NotesEventStream {
         var output = new StringOutput();
         templateEngine.render("notes/list.jte", Map.of("notes", notes), output);
         var html = output.toString();
-        for (var emitter : emitters) {
+        emitters.removeIf(emitter -> {
             try {
                 emitter.send(SseEmitter.event().name("notes").data(html));
+                return false;
             } catch (IOException | IllegalStateException e) {
-                emitters.remove(emitter);
+                return true;
             }
-        }
+        });
     }
 }
